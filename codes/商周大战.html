@@ -57,6 +57,19 @@
   .badge { font-size: 12px; padding: 1px 6px; border-radius: 8px; background: #333; }
   .w-badge { color: #fff; background: #777; }
   .b-badge { color: #000; background: #ccc; }
+  #panel label { display: block; }
+  #movelist {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    margin-top: 8px; font-size: 12px; line-height: 1.5;
+  }
+  #movelist .mv { padding: 2px 4px; border-radius: 3px; white-space: pre; }
+  #movelist .mv.cur { background: #3a3a2a; color: #fc6; }
+  #replay-controls { display: none; }
+  #replay-controls .row { margin: 4px 0; }
+  #study-nav { display: none; }
+  #movelist .mv.st { color: #9cd; }
+  #movelist .mv.st.cur { color: #fc6; }
+  #file-import { display: none; }
 </style>
 </head>
 <body>
@@ -81,13 +94,37 @@
       <option value="army">兵海 (22子)</option>
     </select></label>
     <hr class="sep">
-    <button id="btn-new">新局</button>
-    <button id="btn-undo">悔棋</button>
-    <button id="btn-redo">撤销悔棋</button>
-    <button id="btn-rules">规则 ▾</button>
+    <div id="play-controls">
+      <button id="btn-new">新局</button>
+      <button id="btn-undo">悔棋</button>
+      <button id="btn-redo">撤销悔棋</button>
+      <button id="btn-rules">规则 ▾</button>
+      <hr class="sep">
+      <button id="btn-export">导出棋谱</button>
+      <button id="btn-import">导入棋谱</button>
+      <button id="btn-replay">复盘本局</button>
+    </div>
+    <div id="replay-controls">
+      <div id="replay-nav">
+        <button id="btn-first">首步</button>
+        <button id="btn-prev">前一步</button>
+        <button id="btn-next">后一步</button>
+        <button id="btn-last">末步</button>
+        <button id="btn-study">研究</button>
+        <button id="btn-exit-replay">退出</button>
+      </div>
+      <div id="study-nav">
+        <button id="btn-study-undo">悔棋</button>
+        <button id="btn-exit-study">退出研究</button>
+      </div>
+      <hr class="sep">
+      <div class="row"><span>复盘进度</span><span id="replay-progress">0/0</span></div>
+    </div>
     <hr class="sep">
     <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
+    <div id="movelist"></div>
   </div>
+  <input type="file" id="file-import" accept=".json,application/json">
   <!-- 规则面板：独立列于右面板右侧，默认隐藏，由 #btn-rules 切换 -->
   <aside id="rules">
     <h3>移动</h3>
@@ -109,6 +146,10 @@
     <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
     <h3>开局档位</h3>
     <p>小局 10 子 / 标准 14 子 / 大战 18 子（默认）/ 兵海 22 子，切换档位自动新局。</p>
+    <h3>记谱与复盘</h3>
+    <p>对局自动记录坐标式棋谱（如「1. 白兵 K6→K8 ×黑卒」），显示于右面板下方，含首动/分身/暴走/终局标记。</p>
+    <p>「导出棋谱」保存为 .json 文件；「导入棋谱」加载文件进入复盘模式，可用首步/前一步/后一步/末步逐步回看。「复盘本局」对当前棋谱复盘。</p>
+    <p>复盘时点「研究」可在当前局面继续行棋（仍按回合交替走子）；研究着法以蓝色显示，悔棋可逐手撤回，「退出研究」返回复盘浏览。</p>
   </aside>
 </div>
 
@@ -174,6 +215,12 @@ let positionCounts = new Map();
 let currentPreset = "battle";  // 当前开局档位
 let undoStack = [];            // 悔棋栈：每次落子前压入，悔棋时弹出
 let redoStack = [];            // 撤销悔棋栈：悔棋时压入，重做时弹出；新动作会清空
+let moveLog = [];              // 记谱：每步行棋记录（坐标式）
+let replayMode = false;        // 复盘模式（禁用落子）
+let replayMoves = [];          // 复盘所用的棋谱
+let replayIndex = 0;           // 复盘已应用的步数
+let studyMode = false;         // 研究模式：在复盘当前局面上继续行棋
+let studyMoves = [];           // 研究着法（附在复盘基线之后）
 
 let nextId = 1;
 function makeId() { return nextId++; }
@@ -402,6 +449,55 @@ function positionHash() {
 }
 
 /* =========================================================
+ * 记谱
+ * ========================================================= */
+const EVENT_LABEL = { firstMove: "首动", clone: "分身", berserk: "暴走" };
+
+function coordStr(col, row) { return COL_LETTERS[col] + (row + 1); }
+function parseCoord(s) {
+  if (!s || s.length < 2) return null;
+  const col = COL_LETTERS.indexOf(s[0].toUpperCase());
+  const row = parseInt(s.slice(1), 10) - 1;
+  if (col < 0 || isNaN(row) || row < 0 || row > 18) return null;
+  return [col, row];
+}
+function pieceTypeLabel(type, side) {
+  if (type === "soldier") return side === "white" ? "白兵" : "黑卒";
+  return side === "white" ? "白武" : "黑纣";
+}
+function terminalLabel(t) {
+  if (t.winner === "draw") return "平局";
+  const w = t.winner === "white" ? "白" : "黑";
+  return t.stalemate ? (w + "胜(停棋)") : (w + "胜");
+}
+function notationOf(m) {
+  let s = m.step + ". " + pieceTypeLabel(m.piece, m.side) + " " + m.from + "→" + m.to;
+  if (m.capture) s += " ×" + m.capture;
+  if (m.events) for (const e of m.events) s += " " + (EVENT_LABEL[e] || e);
+  if (m.result) s += " " + m.result;
+  return s;
+}
+// 由一次行棋的前后状态构建棋谱记录
+function buildRecord(piece, res, ctx, r) {
+  const events = [];
+  if (ctx.wasFirstKingMove) events.push("firstMove");
+  if (r.cloneHappened) events.push("clone");
+  if (!ctx.wasBerserk && piece.state === "berserk") events.push("berserk");
+  const rec = {
+    step: stepCount,
+    side: piece.side,
+    piece: ctx.moverTypeBefore,
+    from: coordStr(ctx.fromCol, ctx.fromRow),
+    to: coordStr(piece.col, piece.row),
+    capture: res.captured ? pieceTypeLabel(res.captured.type, res.captured.side) : null,
+    events,
+    result: r.terminal ? terminalLabel(r.terminal) : null,
+  };
+  rec.notation = notationOf(rec);
+  return rec;
+}
+
+/* =========================================================
  * 行动执行
  * ========================================================= */
 function doMove(piece, col, row) {
@@ -435,45 +531,61 @@ function doMove(piece, col, row) {
   return { captured, offered };
 }
 
-// 落子后结算：终局/平局 -> 回合切换
-function finishTurn(piece, moveResult) {
+// 行动结算（不含 UI）：分身转化 → 胜负/停棋/平局 → 回合切换。
+// cloneDecision 控制是否执行分身转化；返回 { terminal, cloneHappened }。
+function settleMove(piece, moveResult, cloneDecision) {
   stepCount++;
-
-  // 分身可选（附属于本次移动的即时效果，不另耗回合）
-  if (moveResult.offered && cloneCandidates.length > 0) {
+  let cloneHappened = false;
+  if (moveResult.offered && cloneCandidates.length > 0 && cloneDecision && bigCount(piece.side) < 2) {
     const s = cloneCandidates[0]; // 多个候选时取首个（士兵等价，不影响）
-    if (bigCount(piece.side) < 2
-        && confirm("士兵与武王相互进入行动范围，是否将该士兵转化为武王分身？")) {
-      s.type = "clone";
-      s.isClone = true;
-      s.state = "free";
-      // 分身直接诞生在己方王城时，视为踏入，按规则 5.6 立即暴走
-      berserkCheck(s);
-      recomputeKingStates();
-    }
+    s.type = "clone";
+    s.isClone = true;
+    s.state = "free";
+    // 分身直接诞生在己方王城时，视为踏入，按规则 5.6 立即暴走
+    berserkCheck(s);
+    recomputeKingStates();
+    cloneHappened = true;
   }
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
 
   // 胜负判定
   const term = checkWinLoss();
-  if (term) { gameOver = term; selected = null; legalMap.clear(); render(); announce(term); return; }
+  if (term) { gameOver = term; return { terminal: term, cloneHappened }; }
 
   // 切换回合
   turn = (turn === "white") ? "black" : "white";
-  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
 
   // 停棋负
   if (!hasAnyMove(turn)) {
     gameOver = { winner: (turn === "white" ? "black" : "white"), stalemate: true };
-    render(); announce(gameOver); return;
+    return { terminal: gameOver, cloneHappened };
   }
 
   // 平局：同一局面出现 3 次
   const h = positionHash();
   const c = (positionCounts.get(h) || 0) + 1;
   positionCounts.set(h, c);
-  if (c >= 3) { gameOver = { winner: "draw" }; render(); announce(gameOver); return; }
+  if (c >= 3) { gameOver = { winner: "draw" }; return { terminal: gameOver, cloneHappened }; }
 
-  render();
+  return { terminal: null, cloneHappened };
+}
+
+// 落子后结算：分身（可选即时效果）→ 终局/平局 → 回合切换 → 记谱
+function finishTurn(piece, res, ctx) {
+  let cloneDecision = false;
+  if (res.offered && cloneCandidates.length > 0) {
+    cloneDecision = confirm("士兵与武王相互进入行动范围，是否将该士兵转化为武王分身？");
+  }
+  const r = settleMove(piece, res, cloneDecision);
+  const rec = buildRecord(piece, res, ctx, r);
+  if (studyMode) studyMoves.push(rec); else moveLog.push(rec);
+  if (r.terminal) {
+    selected = null; legalMap.clear();
+    render(); renderScoresheet();
+    announce(r.terminal);
+    return;
+  }
+  render(); renderScoresheet();
 }
 
 function announce(term) {
@@ -492,6 +604,7 @@ function snapshot() {
     sideCloneUnlocked: { ...sideCloneUnlocked },
     positionCounts: new Map(positionCounts),
     gameOver: gameOver ? { ...gameOver } : null,
+    moveLog: moveLog.slice(),
   };
 }
 function restoreSnapshot(s) {
@@ -502,6 +615,7 @@ function restoreSnapshot(s) {
   sideCloneUnlocked = s.sideCloneUnlocked;
   positionCounts = s.positionCounts;
   gameOver = s.gameOver;
+  moveLog = s.moveLog;
   selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
 }
 function pushHistory() {
@@ -514,6 +628,7 @@ function undo() {
   restoreSnapshot(undoStack.pop());
   document.getElementById("hint").textContent = "已悔棋，撤回上一步行棋。";
   render();
+  renderScoresheet();
 }
 function redo() {
   if (redoStack.length === 0) return;
@@ -521,6 +636,131 @@ function redo() {
   restoreSnapshot(redoStack.pop());
   document.getElementById("hint").textContent = "已撤销悔棋，恢复上一步行棋。";
   render();
+  renderScoresheet();
+}
+
+/* ----- 棋谱渲染 ----- */
+function renderScoresheet() {
+  let list, idx, stBase = 0;
+  if (studyMode) {
+    list = replayMoves.slice(0, replayIndex).concat(studyMoves);
+    idx = replayIndex + studyMoves.length;
+    stBase = replayIndex; // 之后的为研究着法
+  } else if (replayMode) {
+    list = replayMoves; idx = replayIndex;
+  } else {
+    list = moveLog; idx = moveLog.length;
+  }
+  const el = document.getElementById("movelist");
+  let html = "";
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    let cls = (i + 1 === idx) ? " cur" : "";
+    if (studyMode && i >= stBase) cls += " st";
+    html += '<div class="mv' + cls + '">' + (m.notation || notationOf(m)) + "</div>";
+  }
+  el.innerHTML = html || '<div style="color:#888">尚无棋谱。</div>';
+  const cur = el.querySelector(".mv.cur");
+  if (cur) cur.scrollIntoView({ block: "nearest" });
+}
+
+/* ----- 复盘 / 研究模式：从初始局面按记录重放 ----- */
+function resetState() {
+  initPieces();
+  turn = "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  stepCount = 0; gameOver = null;
+  sideLostClone = { white: false, black: false };
+  sideCloneUnlocked = { white: false, black: false };
+  positionCounts = new Map();
+  undoStack = []; redoStack = [];
+}
+// 按一条棋谱记录执行一步（doMove + settleMove），返回是否成功
+function applyRecord(m) {
+  const from = parseCoord(m.from), to = parseCoord(m.to);
+  if (!from || !to) return false;
+  const p = pieceAt(from[0], from[1]);
+  if (!p) return false;
+  const res = doMove(p, to[0], to[1]);
+  const cloneDecision = !!(m.events && m.events.includes("clone"));
+  settleMove(p, res, cloneDecision);
+  return true;
+}
+// 从初始局面重放：复盘基线 replayMoves[0..replayIndex) + 研究着法 studyMoves
+function applyLine() {
+  resetState();
+  for (let i = 0; i < replayIndex && i < replayMoves.length; i++) {
+    if (!applyRecord(replayMoves[i]) || gameOver) break;
+  }
+  for (let i = 0; i < studyMoves.length; i++) {
+    if (!applyRecord(studyMoves[i]) || gameOver) break;
+  }
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+}
+function applyReplayToIndex(n) {
+  resetState();
+  let applied = 0;
+  for (let i = 0; i < n && i < replayMoves.length; i++) {
+    if (!applyRecord(replayMoves[i]) || gameOver) break;
+    applied = i + 1;
+  }
+  replayIndex = applied;
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+}
+function startReplay(moves, preset, label) {
+  replayMode = true;
+  studyMode = false; studyMoves = [];
+  replayMoves = moves;
+  replayIndex = 0;
+  if (PRESETS[preset]) currentPreset = preset;
+  applyReplayToIndex(0);
+  document.getElementById("hint").textContent =
+    "复盘模式（" + (label || "棋谱") + "）：用前一步/后一步回看，点研究可在当前局面继续行棋。";
+  render();
+  renderScoresheet();
+}
+function exitReplay() {
+  replayMode = false; studyMode = false; replayMoves = []; replayIndex = 0; studyMoves = [];
+  newGame();
+}
+function replayGoto(n) {
+  if (!replayMode || studyMode) return;
+  n = Math.max(0, Math.min(n, replayMoves.length));
+  applyReplayToIndex(n);
+  render();
+  renderScoresheet();
+}
+/* ----- 研究模式：在复盘当前局面上继续行棋 ----- */
+function enterStudy() {
+  if (!replayMode || studyMode) return;
+  if (gameOver) {
+    document.getElementById("hint").textContent = "当前为终局局面，无法进入研究。请先回退到非终局位置。";
+    return;
+  }
+  studyMode = true; studyMoves = [];
+  applyReplayToIndex(replayIndex); // 以当前复盘位置为干净基线
+  document.getElementById("hint").textContent =
+    "研究模式：可在棋盘上继续行棋（" + (turn === "white" ? "白" : "黑") + "方回合）。悔棋撤回研究着法，退出研究返回复盘。";
+  render();
+  renderScoresheet();
+}
+function exitStudy() {
+  if (!studyMode) return;
+  studyMode = false; studyMoves = [];
+  applyReplayToIndex(replayIndex); // 回到复盘浏览
+  document.getElementById("hint").textContent = "已退出研究，返回复盘浏览。";
+  render();
+  renderScoresheet();
+}
+function studyUndo() {
+  if (!studyMode || studyMoves.length === 0) return;
+  studyMoves.pop();
+  applyLine();
+  document.getElementById("hint").textContent = studyMoves.length === 0
+    ? "已撤回全部研究着法。"
+    : "已撤回上一步研究着法。";
+  render();
+  renderScoresheet();
 }
 
 /* =========================================================
@@ -656,12 +896,37 @@ function updatePanel() {
   document.getElementById("steps").textContent = stepCount;
   document.getElementById("btn-undo").disabled = undoStack.length === 0;
   document.getElementById("btn-redo").disabled = redoStack.length === 0;
+
+  // 行棋 / 复盘 / 研究 三态切换
+  const playOn = !replayMode;
+  document.getElementById("play-controls").style.display = playOn ? "block" : "none";
+  document.getElementById("replay-controls").style.display = playOn ? "none" : "block";
+  document.getElementById("preset").disabled = !playOn;
+  document.getElementById("btn-replay").disabled = (moveLog.length === 0);
+  if (!playOn) {
+    const navOn = !studyMode;
+    document.getElementById("replay-nav").style.display = navOn ? "block" : "none";
+    document.getElementById("study-nav").style.display = navOn ? "none" : "block";
+    if (navOn) {
+      document.getElementById("replay-progress").textContent = replayIndex + "/" + replayMoves.length;
+      document.getElementById("btn-first").disabled = replayIndex <= 0;
+      document.getElementById("btn-prev").disabled = replayIndex <= 0;
+      document.getElementById("btn-next").disabled = replayIndex >= replayMoves.length;
+      document.getElementById("btn-last").disabled = replayIndex >= replayMoves.length;
+      document.getElementById("btn-study").disabled = !!gameOver;
+    } else {
+      document.getElementById("replay-progress").textContent =
+        "研究 " + studyMoves.length + " 手（基线 " + replayIndex + "/" + replayMoves.length + "）";
+      document.getElementById("btn-study-undo").disabled = (studyMoves.length === 0);
+    }
+  }
 }
 
 /* =========================================================
  * 交互层
  * ========================================================= */
 canvas.addEventListener("click", (e) => {
+  if (replayMode && !studyMode) return;
   if (gameOver) return;
   const rect = canvas.getBoundingClientRect();
   const x = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -691,11 +956,18 @@ canvas.addEventListener("click", (e) => {
   const key = col + "," + row;
   if (legalMap.has(key)) {
     const mover = selected;
+    // 记谱上下文：移动前状态（doMove 会改变 col/row/type/state/hasMoved）
+    const ctx = {
+      fromCol: mover.col, fromRow: mover.row,
+      moverTypeBefore: mover.type,
+      wasFirstKingMove: (mover.type === "king" && !mover.isClone && !mover.hasMoved),
+      wasBerserk: mover.state === "berserk",
+    };
     legalMap.clear(); selected = null;
-    pushHistory(); // 落子前快照，供悔棋恢复
+    if (!studyMode) pushHistory(); // 落子前快照，供悔棋恢复（研究态用 studyUndo 重放）
     const res = doMove(mover, col, row);
     render(); // 先展示落子
-    finishTurn(mover, res);
+    finishTurn(mover, res, ctx);
     return;
   }
 
@@ -730,6 +1002,65 @@ document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
 });
 
+/* ----- 记谱 / 复盘 按钮 ----- */
+function exportRecord() {
+  if (moveLog.length === 0) {
+    document.getElementById("hint").textContent = "尚无棋谱可导出。";
+    return;
+  }
+  const data = { game: "商周大战", preset: currentPreset, moves: moveLog };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "商周大战棋谱.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  document.getElementById("hint").textContent = "棋谱已导出（" + moveLog.length + " 步）。";
+}
+function importRecord(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.moves)) throw new Error("格式不符");
+      const preset = PRESETS[data.preset] ? data.preset : "battle";
+      const moves = data.moves.map(m => ({
+        step: m.step, side: m.side, piece: m.piece,
+        from: m.from, to: m.to,
+        capture: m.capture || null,
+        events: Array.isArray(m.events) ? m.events : [],
+        result: m.result || null,
+        notation: m.notation || notationOf(m),
+      }));
+      startReplay(moves, preset, "导入：" + f.name);
+    } catch (err) {
+      document.getElementById("hint").textContent = "棋谱文件解析失败，未能导入。";
+    }
+  };
+  reader.readAsText(f);
+  e.target.value = "";
+}
+document.getElementById("btn-export").addEventListener("click", exportRecord);
+document.getElementById("btn-import").addEventListener("click", () => document.getElementById("file-import").click());
+document.getElementById("file-import").addEventListener("change", importRecord);
+document.getElementById("btn-replay").addEventListener("click", () => {
+  if (moveLog.length === 0) return;
+  startReplay(moveLog.map(m => ({ ...m })), currentPreset, "本局");
+});
+document.getElementById("btn-first").addEventListener("click", () => replayGoto(0));
+document.getElementById("btn-prev").addEventListener("click", () => replayGoto(replayIndex - 1));
+document.getElementById("btn-next").addEventListener("click", () => replayGoto(replayIndex + 1));
+document.getElementById("btn-last").addEventListener("click", () => replayGoto(replayMoves.length));
+document.getElementById("btn-study").addEventListener("click", enterStudy);
+document.getElementById("btn-exit-replay").addEventListener("click", exitReplay);
+document.getElementById("btn-study-undo").addEventListener("click", studyUndo);
+document.getElementById("btn-exit-study").addEventListener("click", exitStudy);
+
+
 function newGame() {
   initPieces();
   turn = "white";
@@ -739,8 +1070,11 @@ function newGame() {
   sideCloneUnlocked = { white: false, black: false };
   positionCounts = new Map();
   undoStack = []; redoStack = [];
+  moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
+  studyMode = false; studyMoves = [];
   document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
   render();
+  renderScoresheet();
 }
 
 /* =========================================================
@@ -748,6 +1082,7 @@ function newGame() {
  * ========================================================= */
 initPieces();
 render();
+renderScoresheet();
 </script>
 </body>
 </html>
