@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商周大战</title>
+<!-- ===================== 视觉样式 ===================== -->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #2b2b2b;
+    color: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #app { display: flex; gap: 16px; padding: 16px; }
+  #board-wrap { background: #c9a063; padding: 8px; border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  canvas { display: block; cursor: pointer; }
+  #panel {
+    width: 260px; flex: 0 0 260px;
+    background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
+    padding: 14px; font-size: 14px; line-height: 1.6;
+  }
+  #panel h1 { font-size: 20px; margin: 0 0 8px; text-align: center; letter-spacing: 4px; }
+  #panel .sep { border: 0; border-top: 1px solid #444; margin: 10px 0; }
+  #panel .row { display: flex; justify-content: space-between; margin: 3px 0; }
+  #panel .turn { font-weight: bold; }
+  #panel .turn.white { color: #f3f3e0; }
+  #panel .turn.black { color: #bbb; }
+  #panel button {
+    background: #3a3a3a; color: #eee; border: 1px solid #666; border-radius: 4px;
+    padding: 6px 12px; cursor: pointer; font-size: 13px; margin-right: 6px;
+  }
+  #panel button:hover { background: #4a4a4a; }
+  #hint { min-height: 48px; color: #9cd; font-size: 13px; margin-top: 8px; }
+  #rules {
+    margin-top: 10px; max-height: 0; overflow: hidden;
+    transition: max-height .25s ease; font-size: 12.5px; color: #ccc;
+  }
+  #rules.open { max-height: 480px; overflow: auto; }
+  #rules h3 { font-size: 13px; margin: 8px 0 4px; color: #fc6; }
+  #rules p, #rules li { margin: 3px 0; }
+  .badge { font-size: 12px; padding: 1px 6px; border-radius: 8px; background: #333; }
+  .w-badge { color: #fff; background: #777; }
+  .b-badge { color: #000; background: #ccc; }
+</style>
+</head>
+<body>
+<!-- ===================== 布局 ===================== -->
+<div id="app">
+  <div id="board-wrap">
+    <canvas id="board" width="640" height="640"></canvas>
+  </div>
+  <div id="panel">
+    <h1>商周大战</h1>
+    <hr class="sep">
+    <div class="row"><span>当前回合</span><span id="turn" class="turn white">白方</span></div>
+    <div class="row"><span><span class="badge w-badge">白武王</span></span><span id="w-king">禁锢</span></div>
+    <div class="row"><span><span class="badge b-badge">黑武王</span></span><span id="b-king">禁锢</span></div>
+    <div class="row"><span>分身</span><span><span class="w-badge badge" id="w-clone">白0</span> / <span class="b-badge badge" id="b-clone">黑0</span></span></div>
+    <div class="row"><span>步数</span><span id="steps">0</span></div>
+    <hr class="sep">
+    <button id="btn-new">新局</button>
+    <button id="btn-rules">规则 ▾</button>
+    <hr class="sep">
+    <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
+    <div id="rules">
+      <h3>移动</h3>
+      <p>横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
+      <h3>禁锢与解锁</h3>
+      <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。</p>
+      <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
+      <p>主动解锁：己方任意棋子移至武王行动范围（2 格）即解除禁锢。</p>
+      <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
+      <h3>分身</h3>
+      <p>该方武王首次移动后解锁分身能力。此后士兵进入己方武王（含分身）行动范围，或武王进入士兵行动范围，可即时将该士兵变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
+      <h3>暴走</h3>
+      <p>武王/分身踏入己方王城即获暴走：可直线斜线走无限格（可穿己方、不可穿敌，吃敌后停）。触发后己方失去分身能力，对方武王全部解除禁锢。</p>
+      <h3>胜负</h3>
+      <p>击杀对方全部武王（含分身）且己方王已解锁则胜。己方王禁锢且小棋子全灭则负。无合法行动则负（停棋负）。</p>
+      <h3>平局</h3>
+      <p>同一局面出现 3 次判平局。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+ * 数据层
+ * ========================================================= */
+const SIZE = 19;
+const COL_LETTERS = "ABCDEFGHJKLMNOPQRST"; // 跳过 I
+const MARGIN = 32, CELL = 32;
+
+// 王城（内部坐标 row=0 对应棋盘第1行=底部）
+const WHITE_PALACE = { c0: 7, c1: 11, r0: 0, r1: 3 };  // 白方(底部) H-M / 1-4
+const BLACK_PALACE = { c0: 7, c1: 11, r0: 15, r1: 18 }; // 黑方(顶部) H-M / 16-19
+
+let pieces = [];
+let turn = "white";          // 当前回合方
+let selected = null;        // 选中的棋子对象
+let legalMap = new Map();    // "c,r" -> {capture:bool} 选中棋子的合法目标
+let cloneOfferCells = new Set(); // 可触发分身的格 "c,r"
+let cloneCandidates = [];       // 可变身的士兵对象列表
+let stepCount = 0;
+let gameOver = null;        // null | {winner:"white"|"black"|"draw"}
+let sideLostClone = { white: false, black: false };       // 暴走后己方失去分身能力
+let sideCloneUnlocked = { white: false, black: false };    // 武王首次移动后才解锁分身能力
+let positionCounts = new Map();
+
+let nextId = 1;
+function makeId() { return nextId++; }
+
+// 初始局面
+function initPieces() {
+  nextId = 1;
+  const data = [
+    ["white","king",  9,18],
+    ["black","king",  9, 0],
+    ["black","soldier",7,18],
+    ["black","soldier",9,16],
+    ["black","soldier",11,18],
+    ["white","soldier",7, 0],
+    ["white","soldier",9, 2],
+    ["white","soldier",11, 0],
+  ];
+  pieces = data.map(d => ({
+    id: makeId(), side: d[0], type: d[1],
+    col: d[2], row: d[3],
+    state: d[1] === "king" ? "imprisoned_invincible" : "free",
+    isClone: false,
+    hasMoved: false,         // 仅对 king 有意义：首次移动后为 true（失去无敌、不可再禁锢）
+    activelyUnlocked: false, // 主动解锁标记：禁止被动重新禁锢
+  }));
+}
+
+function pieceAt(c, r) {
+  for (const p of pieces) if (p.col === c && p.row === r) return p;
+  return null;
+}
+
+/* =========================================================
+ * 坐标转换
+ * ========================================================= */
+function cellToXY(col, row) {
+  const x = MARGIN + col * CELL;
+  const y = MARGIN + (18 - row) * CELL; // row=0 在底部
+  return [x, y];
+}
+function xyToCell(x, y) {
+  const col = Math.round((x - MARGIN) / CELL);
+  const row = 18 - Math.round((y - MARGIN) / CELL);
+  if (col < 0 || col > 18 || row < 0 || row > 18) return null;
+  return [col, row];
+}
+function inPalace(side, col, row) {
+  const P = side === "white" ? WHITE_PALACE : BLACK_PALACE;
+  return col >= P.c0 && col <= P.c1 && row >= P.r0 && row <= P.r1;
+}
+/* =========================================================
+ * 规则层
+ * ========================================================= */
+const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+// 合法移动目标（含吃子），已考虑路径阻挡。imprisoned 返回空。
+function legalMoves(piece) {
+  const moves = [];
+  if (piece.state === "imprisoned_invincible") return moves;
+  const maxStep = piece.state === "berserk" ? 18 : 2;
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= maxStep; s++) {
+      const nc = piece.col + dc * s, nr = piece.row + dr * s;
+      if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+      const occ = pieceAt(nc, nr);
+      if (!occ) {
+        moves.push({ col: nc, row: nr, capture: false });
+      } else if (occ.side !== piece.side) {
+        moves.push({ col: nc, row: nr, capture: true });
+        break; // 吃敌后停；不可越过敌
+      } else {
+        // 己方：可穿过（不落子），继续下一步
+        continue;
+      }
+    }
+  }
+  return moves;
+}
+
+// 武王理论行动范围（2格几何 / 暴走无限射线），忽略阻挡。用于主动解锁与分身触发。
+function theoreticalRange(king) {
+  const set = new Set();
+  const maxStep = king.state === "berserk" ? 18 : 2;
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= maxStep; s++) {
+      const nc = king.col + dc * s, nr = king.row + dr * s;
+      if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+      set.add(nc + "," + nr);
+    }
+  }
+  return set;
+}
+
+// 覆盖武王的敌方棋子数是否 >=2
+function isImprisoned(king) {
+  let n = 0;
+  for (const p of pieces) {
+    if (p.side === king.side) continue;       // 只看敌方
+    if (p.state === "imprisoned_invincible") continue; // 禁锢棋子不能动，不计
+    const moves = legalMoves(p);
+    for (const m of moves) {
+      if (m.col === king.col && m.row === king.row) { n++; break; }
+    }
+  }
+  return n >= 2;
+}
+
+function kingOf(side) { return pieces.find(p => p.side === side && p.type === "king" && !p.isClone); }
+function bigCount(side) { return pieces.filter(p => p.side === side && (p.type === "king" || p.type === "clone")).length; }
+function cloneCount(side) { return pieces.filter(p => p.side === side && p.type === "clone").length; }
+
+// 被动重算：所有未移动且未主动解锁的武王，按覆盖数定禁锢/解锁
+function recomputeKingStates() {
+  for (const k of pieces) {
+    if (k.type !== "king" || k.isClone) continue;
+    if (k.state === "berserk") continue; // 暴走不变
+    if (k.hasMoved || k.activelyUnlocked) {
+      k.state = "free";
+    } else {
+      k.state = isImprisoned(k) ? "imprisoned_invincible" : "free";
+    }
+  }
+}
+
+// 主动解锁：刚移动的棋子若进入己方禁锢武王的理论范围，解除其禁锢
+function activeUnlockCheck(moved) {
+  for (const k of pieces) {
+    if (k.side !== moved.side) continue;
+    if (k.type !== "king" || k.isClone) continue;
+    if (k.state !== "imprisoned_invincible") continue; // 仅当前禁锢中
+    const range = theoreticalRange(k);
+    if (range.has(moved.col + "," + moved.row)) {
+      k.activelyUnlocked = true; // 标记后由 recompute 置 free，且不再被动重新禁锢
+    }
+  }
+}
+
+// 暴走判定：武王/分身踏入己方王城
+function berserkCheck(moved) {
+  if (moved.type !== "king" && moved.type !== "clone") return;
+  if (moved.state === "berserk") return;
+  if (!inPalace(moved.side, moved.col, moved.row)) return; // inPalace(side)=己方王城
+  moved.state = "berserk";
+  if (moved.type === "king") moved.hasMoved = true; // 暴走必然已移动
+  sideLostClone[moved.side] = true;                 // 己方失去分身能力
+  // 对方所有武王解除无敌禁锢（一次性、不可逆）
+  for (const k of pieces) {
+    if (k.side === moved.side) continue;
+    if (k.type !== "king" || k.isClone) continue;
+    k.hasMoved = true;              // 失去无敌，可被吃，且不可再被禁锢
+    if (k.state !== "berserk") k.state = "free";
+    k.activelyUnlocked = true;
+  }
+}
+
+// 士兵是否在己方任一武王(含分身)理论范围内
+function inAnyFriendlyBigRange(soldier) {
+  for (const k of pieces) {
+    if (k.side !== soldier.side) continue;
+    if (k.type !== "king" && k.type !== "clone") continue;
+    if (theoreticalRange(k).has(soldier.col + "," + soldier.row)) return true;
+  }
+  return false;
+}
+
+// 分身触发（双向）：士兵进入武王范围，或武王进入士兵范围。
+// moved 为本次移动的棋子；返回 true 表示存在可变身的士兵。
+function cloneOfferCheck(moved) {
+  cloneOfferCells.clear();
+  cloneCandidates = [];
+  if (sideLostClone[moved.side]) return false;
+  if (!sideCloneUnlocked[moved.side]) return false; // 须该方武王首次移动后才解锁分身
+  if (bigCount(moved.side) >= 2) return false;
+  if (moved.type === "soldier") {
+    // 情形一：士兵进入武王移动范围
+    if (inAnyFriendlyBigRange(moved)) cloneCandidates.push(moved);
+  } else if (moved.type === "king" || moved.type === "clone") {
+    // 情形二：武王进入小棋子移动范围（等价于：士兵落在武王2格范围内）
+    const range = theoreticalRange(moved);
+    for (const s of pieces) {
+      if (s.side !== moved.side || s.type !== "soldier") continue;
+      if (range.has(s.col + "," + s.row)) cloneCandidates.push(s);
+    }
+  }
+  if (cloneCandidates.length === 0) return false;
+  for (const s of cloneCandidates) cloneOfferCells.add(s.col + "," + s.row);
+  return true;
+}
+
+// 某方是否处于解锁态：任一本体武王非禁锢，或存在分身（分身恒为 free/berserk）
+function sideUnlocked(side) {
+  for (const p of pieces) {
+    if (p.side !== side) continue;
+    if (p.type === "clone") return true;
+    if (p.type === "king" && p.state !== "imprisoned_invincible") return true;
+  }
+  return false;
+}
+function soldiersOf(side) { return pieces.filter(p => p.side === side && p.type === "soldier").length; }
+
+// 胜负判定（不含平局）
+function checkWinLoss() {
+  const wBig = bigCount("white"), bBig = bigCount("black");
+  if (wBig === 0 && sideUnlocked("black")) return { winner: "black" };
+  if (bBig === 0 && sideUnlocked("white")) return { winner: "white" };
+  const wKing = kingOf("white"), bKing = kingOf("black");
+  if (wKing && wKing.state === "imprisoned_invincible" && soldiersOf("white") === 0) return { winner: "black" };
+  if (bKing && bKing.state === "imprisoned_invincible" && soldiersOf("black") === 0) return { winner: "white" };
+  return null;
+}
+
+// 停棋负：轮到一方无合法行动
+function hasAnyMove(side) {
+  for (const p of pieces) {
+    if (p.side !== side) continue;
+    if (legalMoves(p).length > 0) return true;
+  }
+  return false;
+}
+
+function positionHash() {
+  const arr = pieces.map(p => `${p.side[0]}${p.type[0]}${p.col},${p.row},${p.state[0]}${p.hasMoved?1:0}${p.activelyUnlocked?1:0}`)
+                   .sort().join("|");
+  return turn + "|" + arr + "|" + (sideLostClone.white?1:0) + (sideLostClone.black?1:0)
+       + (sideCloneUnlocked.white?1:0) + (sideCloneUnlocked.black?1:0);
+}
+
+/* =========================================================
+ * 行动执行
+ * ========================================================= */
+function doMove(piece, col, row) {
+  const target = pieceAt(col, row);
+  let captured = null;
+  if (target && target.side !== piece.side) {
+    captured = target;
+    pieces = pieces.filter(p => p !== target);
+  }
+  piece.col = col;
+  piece.row = row;
+
+  // 武王本体首次移动：失去无敌、可被吃；并解锁本方分身能力
+  if (piece.type === "king" && !piece.isClone && !piece.hasMoved) {
+    piece.hasMoved = true;
+    sideCloneUnlocked[piece.side] = true;
+  }
+
+  // 暴走判定（含对方解禁锢副作用）
+  berserkCheck(piece);
+
+  // 主动解锁
+  activeUnlockCheck(piece);
+
+  // 分身提示（仅士兵且可变身时）
+  let offered = cloneOfferCheck(piece);
+
+  // 被动重算禁锢状态
+  recomputeKingStates();
+
+  return { captured, offered };
+}
+
+// 落子后结算：终局/平局 -> 回合切换
+function finishTurn(piece, moveResult) {
+  stepCount++;
+
+  // 分身可选（附属于本次移动的即时效果，不另耗回合）
+  if (moveResult.offered && cloneCandidates.length > 0) {
+    const s = cloneCandidates[0]; // 多个候选时取首个（士兵等价，不影响）
+    if (bigCount(piece.side) < 2
+        && confirm("士兵与武王相互进入行动范围，是否将该士兵转化为武王分身？")) {
+      s.type = "clone";
+      s.isClone = true;
+      s.state = "free";
+      recomputeKingStates();
+    }
+  }
+
+  // 胜负判定
+  const term = checkWinLoss();
+  if (term) { gameOver = term; selected = null; legalMap.clear(); render(); announce(term); return; }
+
+  // 切换回合
+  turn = (turn === "white") ? "black" : "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+
+  // 停棋负
+  if (!hasAnyMove(turn)) {
+    gameOver = { winner: (turn === "white" ? "black" : "white"), stalemate: true };
+    render(); announce(gameOver); return;
+  }
+
+  // 平局：同一局面出现 3 次
+  const h = positionHash();
+  const c = (positionCounts.get(h) || 0) + 1;
+  positionCounts.set(h, c);
+  if (c >= 3) { gameOver = { winner: "draw" }; render(); announce(gameOver); return; }
+
+  render();
+}
+
+function announce(term) {
+  const hint = document.getElementById("hint");
+  if (term.winner === "draw") hint.textContent = "平局！局面重复 3 次。";
+  else if (term.stalemate) hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜（对方无棋可走）！";
+  else hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
+}
+
+/* =========================================================
+ * 渲染层
+ * ========================================================= */
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+
+function render() {
+  drawBoard();
+  drawHighlights();
+  drawPieces();
+  updatePanel();
+}
+
+function drawBoard() {
+  ctx.fillStyle = "#c9a063";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 王城底色
+  ctx.fillStyle = "rgba(80,140,200,0.25)"; // 白方王城(底部)蓝调
+  fillPalace(WHITE_PALACE);
+  ctx.fillStyle = "rgba(200,80,80,0.25)";  // 黑方王城(顶部)红调
+  fillPalace(BLACK_PALACE);
+
+  // 网格线
+  ctx.strokeStyle = "#3a2a14";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < SIZE; i++) {
+    let [x1, y1] = cellToXY(i, 0), [x2, y2] = cellToXY(i, 18);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    [x1, y1] = cellToXY(0, i); [x2, y2] = cellToXY(18, i);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  // 星位
+  const stars = [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
+  ctx.fillStyle = "#3a2a14";
+  for (const [c, r] of stars) {
+    const [x, y] = cellToXY(c, r);
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+  }
+
+  // 坐标
+  ctx.fillStyle = "#3a2a14";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let i = 0; i < SIZE; i++) {
+    const [x, yTop] = cellToXY(i, 18);
+    ctx.fillText(COL_LETTERS[i], x, MARGIN/2);
+    ctx.fillText(COL_LETTERS[i], x, canvas.height - MARGIN/2);
+    const [xL, y] = cellToXY(0, i);
+    ctx.fillText(String(i+1), MARGIN/2, y);
+    ctx.fillText(String(i+1), canvas.width - MARGIN/2, y);
+  }
+}
+
+function fillPalace(P) {
+  const [x1, y1] = cellToXY(P.c0, P.r1);
+  const [x2, y2] = cellToXY(P.c1, P.r0);
+  ctx.fillRect(x1 - CELL/2, y1 - CELL/2, x2 - x1 + CELL, y2 - y1 + CELL);
+}
+
+function drawHighlights() {
+  if (!selected) return;
+  // 选中棋子描边
+  const [sx, sy] = cellToXY(selected.col, selected.row);
+  ctx.strokeStyle = "#ffd700";
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(sx, sy, CELL*0.46, 0, Math.PI*2); ctx.stroke();
+
+  // 合法目标
+  for (const [key, info] of legalMap) {
+    const [c, r] = key.split(",").map(Number);
+    const [x, y] = cellToXY(c, r);
+    ctx.fillStyle = info.capture ? "rgba(220,40,40,0.45)" : "rgba(60,200,80,0.4)";
+    ctx.beginPath(); ctx.arc(x, y, CELL*0.42, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawPieces() {
+  for (const p of pieces) {
+    const [x, y] = cellToXY(p.col, p.row);
+    const isBig = p.type === "king" || p.type === "clone";
+    const r = isBig ? CELL*0.42 : CELL*0.30;
+
+    if (p.state === "berserk") {
+      ctx.save();
+      ctx.shadowColor = p.side === "white" ? "#fff" : "#f44";
+      ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.arc(x, y, r+2, 0, Math.PI*2);
+      ctx.fillStyle = p.side === "white" ? "#fff" : "#111";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = p.side === "white" ? "#f8f3e0" : "#1a1a1a";
+    ctx.fill();
+    ctx.lineWidth = isBig ? 2.5 : 1.5;
+    ctx.strokeStyle = p.side === "white" ? "#222" : "#000";
+    ctx.stroke();
+
+    // 文字
+    let label;
+    if (p.type === "king") label = p.side === "white" ? "武" : "纣";
+    else if (p.type === "clone") label = "分";
+    else label = p.side === "white" ? "兵" : "卒";
+    ctx.fillStyle = p.side === "white" ? "#222" : "#eee";
+    ctx.font = (isBig ? "bold " : "") + (isBig ? 16 : 13) + "px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(label, x, y);
+  }
+}
+
+function kingStateText(side) {
+  const k = kingOf(side);
+  if (!k) return "阵亡";
+  if (k.state === "imprisoned_invincible") return "禁锢";
+  if (k.state === "berserk") return "暴走";
+  if (k.hasMoved) return "解锁";
+  return "解锁·无敌";
+}
+
+function updatePanel() {
+  document.getElementById("turn").textContent = gameOver
+    ? (gameOver.winner === "draw" ? "平局" : (gameOver.winner === "white" ? "白方胜" : "黑方胜"))
+    : (turn === "white" ? "白方" : "黑方");
+  document.getElementById("turn").className = "turn " + (turn === "white" ? "white" : "black");
+  document.getElementById("w-king").textContent = kingStateText("white");
+  document.getElementById("b-king").textContent = kingStateText("black");
+  document.getElementById("w-clone").textContent = "白" + cloneCount("white");
+  document.getElementById("b-clone").textContent = "黑" + cloneCount("black");
+  document.getElementById("steps").textContent = stepCount;
+}
+
+/* =========================================================
+ * 交互层
+ * ========================================================= */
+canvas.addEventListener("click", (e) => {
+  if (gameOver) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const cell = xyToCell(x, y);
+  if (!cell) { selected = null; legalMap.clear(); render(); return; }
+  const [col, row] = cell;
+  const hint = document.getElementById("hint");
+
+  if (!selected) {
+    // IDLE：选择己方可动棋子
+    const p = pieceAt(col, row);
+    if (p && p.side === turn && legalMoves(p).length > 0) {
+      selected = p;
+      rebuildLegalMap();
+      hint.textContent = "已选中棋子，点击高亮格落子（绿=走，红=吃）。";
+      render();
+    } else if (p && p.side === turn) {
+      hint.textContent = "该棋子无可走格。";
+    } else {
+      hint.textContent = (turn === "white" ? "白方" : "黑方") + "回合，请点击己方棋子。";
+    }
+    return;
+  }
+
+  // SELECTED
+  const key = col + "," + row;
+  if (legalMap.has(key)) {
+    const mover = selected;
+    legalMap.clear(); selected = null;
+    const res = doMove(mover, col, row);
+    render(); // 先展示落子
+    finishTurn(mover, res);
+    return;
+  }
+
+  // 切换到另一枚己方棋子
+  const p = pieceAt(col, row);
+  if (p && p.side === turn && legalMoves(p).length > 0) {
+    selected = p; rebuildLegalMap();
+    hint.textContent = "已切换选中棋子。";
+    render();
+  } else {
+    selected = null; legalMap.clear();
+    hint.textContent = "已取消选择。";
+    render();
+  }
+});
+
+function rebuildLegalMap() {
+  legalMap.clear();
+  for (const m of legalMoves(selected)) {
+    legalMap.set(m.col + "," + m.row, { capture: m.capture });
+  }
+}
+
+document.getElementById("btn-new").addEventListener("click", newGame);
+document.getElementById("btn-rules").addEventListener("click", () => {
+  document.getElementById("rules").classList.toggle("open");
+});
+
+function newGame() {
+  initPieces();
+  turn = "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  stepCount = 0; gameOver = null;
+  sideLostClone = { white: false, black: false };
+  sideCloneUnlocked = { white: false, black: false };
+  positionCounts = new Map();
+  document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
+  render();
+}
+
+/* =========================================================
+ * 启动
+ * ========================================================= */
+initPieces();
+render();
+</script>
+</body>
+</html>
