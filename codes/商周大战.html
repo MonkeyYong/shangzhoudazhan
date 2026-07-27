@@ -119,14 +119,23 @@ function makeId() { return nextId++; }
 function initPieces() {
   nextId = 1;
   const data = [
+    // 武王（互困于对方王城，初始无敌禁锢）
     ["white","king",  9,18],
     ["black","king",  9, 0],
+    // 围困武王的敌军 3 兵（每方武王被 3 名敌兵覆盖 → 禁锢生效）
     ["black","soldier",7,18],
     ["black","soldier",9,16],
     ["black","soldier",11,18],
     ["white","soldier",7, 0],
     ["white","soldier",9, 2],
     ["white","soldier",11, 0],
+    // 中场前哨 3 兵（中心对称：白方下半盘 / 黑方上半盘）
+    ["white","soldier",6, 4],
+    ["white","soldier",9, 5],
+    ["white","soldier",12,4],
+    ["black","soldier",12,14],
+    ["black","soldier",9, 13],
+    ["black","soldier",6, 14],
   ];
   pieces = data.map(d => ({
     id: makeId(), side: d[0], type: d[1],
