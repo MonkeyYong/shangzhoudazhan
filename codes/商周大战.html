@@ -929,41 +929,107 @@ function drawPieces() {
     const [x, y] = cellToXY(p.col, p.row);
     const isBig = p.type === "king" || p.type === "clone";
     const r = isBig ? CELL*0.42 : CELL*0.30;
+    const isWhite = p.side === "white";
 
+    // 暴走外辉光环
     if (p.state === "berserk") {
       ctx.save();
-      ctx.shadowColor = p.side === "white" ? "#fff" : "#f44";
-      ctx.shadowBlur = 16;
-      ctx.beginPath(); ctx.arc(x, y, r+2, 0, Math.PI*2);
-      ctx.fillStyle = p.side === "white" ? "#fff" : "#111";
-      ctx.fill();
+      ctx.shadowColor = isWhite ? "#fff2a0" : "#ff5a2a";
+      ctx.shadowBlur = 20;
+      ctx.strokeStyle = isWhite ? "rgba(255,240,180,0.55)" : "rgba(255,90,40,0.6)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI*2); ctx.stroke();
       ctx.restore();
     }
 
+    // 地面投影：更柔更散，营造圆润悬浮感
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.4)";
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetY = 2;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 9;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 4;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fillStyle = p.side === "white" ? "#f8f3e0" : "#1a1a1a";
+    ctx.fillStyle = "#000";
     ctx.fill();
     ctx.restore();
-    // 顶部高光弧，增强球面感
+
+    // 球面径向渐变主体（光源左上，多色阶过渡）
+    const grad = ctx.createRadialGradient(
+      x - r*0.38, y - r*0.44, r*0.05,
+      x, y, r * 1.12
+    );
+    if (isWhite) {
+      grad.addColorStop(0,    "#ffffff");
+      grad.addColorStop(0.22, "#fbf5e6");
+      grad.addColorStop(0.6,  "#ecdcb4");
+      grad.addColorStop(1,    "#b8a676");
+    } else {
+      grad.addColorStop(0,    "#7c7c7c");
+      grad.addColorStop(0.22, "#3c3c3c");
+      grad.addColorStop(0.6,  "#1e1e1e");
+      grad.addColorStop(1,    "#020202");
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 底部反射高光弧（圆润关键：底部内侧反光，暗示球面回转）
     ctx.save();
-    ctx.beginPath(); ctx.arc(x, y, r, Math.PI*1.15, Math.PI*1.85);
-    ctx.strokeStyle = p.side === "white" ? "rgba(255,255,255,0.55)" : "rgba(120,120,120,0.4)";
-    ctx.lineWidth = isBig ? 2 : 1.2;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.9, Math.PI * 0.18, Math.PI * 0.82, false);
+    ctx.strokeStyle = isWhite ? "rgba(255,255,255,0.28)" : "rgba(150,150,150,0.2)";
+    ctx.lineWidth = r * 0.14;
+    ctx.lineCap = "round";
     ctx.stroke();
     ctx.restore();
+
+    // 描边
     ctx.lineWidth = isBig ? 2.5 : 1.5;
-    ctx.strokeStyle = p.side === "white" ? "#222" : "#000";
+    ctx.strokeStyle = isWhite ? "#3a2a14" : "#000";
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
 
+    // 大棋子内圈：本体金环 / 分身虚环
+    if (p.type === "king") {
+      ctx.strokeStyle = "rgba(232,195,74,0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r*0.66, 0, Math.PI*2); ctx.stroke();
+    } else if (p.type === "clone") {
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "rgba(210,180,140,0.8)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r*0.66, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 镜面高光：大软光斑 + 小亮点（光泽玻璃感）
+    ctx.save();
+    ctx.translate(x - r*0.3, y - r*0.38);
+    ctx.scale(0.6, 0.36);
+    ctx.beginPath(); ctx.arc(0, 0, r*0.75, 0, Math.PI*2);
+    ctx.fillStyle = isWhite ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.18)";
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x - r*0.34, y - r*0.4, r*0.14, 0, Math.PI*2);
+    ctx.fillStyle = isWhite ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.4)";
+    ctx.fill();
+    ctx.restore();
+
+    // 禁锢笼环（仅禁锢中的武王）
+    if (p.state === "imprisoned_invincible") {
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "rgba(120,180,255,0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
     // 文字
-    let label;
-    if (p.type === "king" || p.type === "clone") label = p.side === "white" ? "武" : "纣";
-    else label = p.side === "white" ? "兵" : "卒";
-    ctx.fillStyle = p.side === "white" ? "#222" : "#eee";
+    const label = isBig ? (isWhite ? "武" : "纣") : (isWhite ? "兵" : "卒");
+    ctx.fillStyle = isWhite ? "#2a1a08" : "#eee";
     ctx.font = (isBig ? "bold " : "") + (isBig ? 16 : 13) + "px sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(label, x, y);
