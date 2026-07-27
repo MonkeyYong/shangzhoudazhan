@@ -35,6 +35,7 @@
     padding: 6px 12px; cursor: pointer; font-size: 13px; margin-right: 6px;
   }
   #panel button:hover { background: #4a4a4a; }
+  #panel button:disabled { opacity: .4; cursor: default; }
   #hint { min-height: 48px; color: #9cd; font-size: 13px; margin-top: 8px; }
   #rules {
     margin-top: 10px; max-height: 0; overflow: hidden;
@@ -64,6 +65,7 @@
     <div class="row"><span>步数</span><span id="steps">0</span></div>
     <hr class="sep">
     <button id="btn-new">新局</button>
+    <button id="btn-undo">悔棋</button>
     <button id="btn-rules">规则 ▾</button>
     <hr class="sep">
     <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
@@ -111,6 +113,7 @@ let gameOver = null;        // null | {winner:"white"|"black"|"draw"}
 let sideLostClone = { white: false, black: false };       // 暴走后己方失去分身能力
 let sideCloneUnlocked = { white: false, black: false };    // 武王首次移动后才解锁分身能力
 let positionCounts = new Map();
+let history = [];             // 悔棋快照栈：每次落子前压入，悔棋时弹出
 
 let nextId = 1;
 function makeId() { return nextId++; }
@@ -427,6 +430,33 @@ function announce(term) {
   else hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
 }
 
+/* ----- 悔棋：落子前快照，悔棋时恢复 ----- */
+function snapshot() {
+  return {
+    pieces: pieces.map(p => ({ ...p })),
+    turn, stepCount,
+    sideLostClone: { ...sideLostClone },
+    sideCloneUnlocked: { ...sideCloneUnlocked },
+    positionCounts: new Map(positionCounts),
+    gameOver: gameOver ? { ...gameOver } : null,
+  };
+}
+function pushHistory() { history.push(snapshot()); }
+function undo() {
+  if (history.length === 0) return;
+  const s = history.pop();
+  pieces = s.pieces;
+  turn = s.turn;
+  stepCount = s.stepCount;
+  sideLostClone = s.sideLostClone;
+  sideCloneUnlocked = s.sideCloneUnlocked;
+  positionCounts = s.positionCounts;
+  gameOver = s.gameOver;
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  document.getElementById("hint").textContent = "已悔棋，撤回上一步行棋。";
+  render();
+}
+
 /* =========================================================
  * 渲染层
  * ========================================================= */
@@ -559,6 +589,7 @@ function updatePanel() {
   document.getElementById("w-clone").textContent = "白" + cloneCount("white");
   document.getElementById("b-clone").textContent = "黑" + cloneCount("black");
   document.getElementById("steps").textContent = stepCount;
+  document.getElementById("btn-undo").disabled = history.length === 0;
 }
 
 /* =========================================================
@@ -595,6 +626,7 @@ canvas.addEventListener("click", (e) => {
   if (legalMap.has(key)) {
     const mover = selected;
     legalMap.clear(); selected = null;
+    pushHistory(); // 落子前快照，供悔棋恢复
     const res = doMove(mover, col, row);
     render(); // 先展示落子
     finishTurn(mover, res);
@@ -622,6 +654,7 @@ function rebuildLegalMap() {
 }
 
 document.getElementById("btn-new").addEventListener("click", newGame);
+document.getElementById("btn-undo").addEventListener("click", undo);
 document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
 });
@@ -634,6 +667,7 @@ function newGame() {
   sideLostClone = { white: false, black: false };
   sideCloneUnlocked = { white: false, black: false };
   positionCounts = new Map();
+  history = [];
   document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
   render();
 }
