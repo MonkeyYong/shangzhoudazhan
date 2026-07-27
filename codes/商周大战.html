@@ -17,17 +17,25 @@
     justify-content: center;
   }
   #app { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
-  #board-wrap { background: #c9a063; padding: 8px; border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  #board-wrap {
+    background: linear-gradient(135deg, #6b4a26, #4a3015);
+    padding: 10px; border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.6), inset 0 0 0 2px rgba(232,195,74,0.45);
+  }
   canvas { display: block; cursor: pointer; }
   #panel {
     width: 260px; flex: 0 0 260px;
-    height: 656px; /* 与 #board-wrap 等高（canvas 640 + 内边距 8*2） */
+    height: 660px; /* 与 #board-wrap 等高（canvas 640 + 内边距 10*2） */
     background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
     padding: 14px; font-size: 14px; line-height: 1.6;
     overflow: hidden;
     display: flex; flex-direction: column;
   }
-  #panel h1 { font-size: 20px; margin: 0 0 8px; text-align: center; letter-spacing: 4px; }
+  #panel h1 {
+    font-size: 22px; margin: 0 0 10px; text-align: center; letter-spacing: 6px;
+    color: #e8c34a; text-shadow: 0 0 8px rgba(232,195,74,0.4);
+    border-bottom: 1px solid #5a4218; padding-bottom: 8px;
+  }
   #panel .sep { border: 0; border-top: 1px solid #444; margin: 10px 0; }
   #panel .row { display: flex; justify-content: space-between; margin: 3px 0; }
   #panel .turn { font-weight: bold; }
@@ -46,7 +54,7 @@
   #hint { min-height: 48px; color: #9cd; font-size: 13px; margin-top: 8px; }
   #rules {
     display: none;
-    width: 320px; height: 656px; /* 与右面板同高，独立于其右侧 */
+    width: 320px; height: 660px; /* 与右面板同高，独立于其右侧 */
     background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
     padding: 14px; font-size: 13px; line-height: 1.65; color: #ccc;
     overflow-y: auto;
@@ -777,17 +785,20 @@ function render() {
 }
 
 function drawBoard() {
-  ctx.fillStyle = "#c9a063";
+  // 木质底色：径向渐变营造温润深浅
+  const bg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 80,
+                                      canvas.width/2, canvas.height/2, canvas.width*0.75);
+  bg.addColorStop(0, "#d6b47c");
+  bg.addColorStop(1, "#b8915a");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 王城底色
-  ctx.fillStyle = "rgba(80,140,200,0.25)"; // 白方王城(底部)蓝调
-  fillPalace(WHITE_PALACE);
-  ctx.fillStyle = "rgba(200,80,80,0.25)";  // 黑方王城(顶部)红调
-  fillPalace(BLACK_PALACE);
+  // 王庭立体平台（底座 + 斜面，置于网格之下）
+  drawPalacePlatform(WHITE_PALACE, "white");
+  drawPalacePlatform(BLACK_PALACE, "black");
 
   // 网格线
-  ctx.strokeStyle = "#3a2a14";
+  ctx.strokeStyle = "rgba(58,42,20,0.85)";
   ctx.lineWidth = 1;
   for (let i = 0; i < SIZE; i++) {
     let [x1, y1] = cellToXY(i, 0), [x2, y2] = cellToXY(i, 18);
@@ -795,6 +806,10 @@ function drawBoard() {
     [x1, y1] = cellToXY(0, i); [x2, y2] = cellToXY(18, i);
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
   }
+
+  // 王庭装饰（金边 + 徽记，置于网格之上）
+  drawPalaceDecor(WHITE_PALACE, "white");
+  drawPalaceDecor(BLACK_PALACE, "black");
 
   // 星位
   const stars = [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
@@ -818,10 +833,78 @@ function drawBoard() {
   }
 }
 
-function fillPalace(P) {
+function palaceRect(P) {
   const [x1, y1] = cellToXY(P.c0, P.r1);
   const [x2, y2] = cellToXY(P.c1, P.r0);
-  ctx.fillRect(x1 - CELL/2, y1 - CELL/2, x2 - x1 + CELL, y2 - y1 + CELL);
+  return { x: x1 - CELL/2, y: y1 - CELL/2, w: x2 - x1 + CELL, h: y2 - y1 + CELL };
+}
+
+// 王庭底座：悬浮投影 + 渐变主体 + 斜面亮暗边（隆起感）
+function drawPalacePlatform(P, side) {
+  const r = palaceRect(P);
+  const isWhite = side === "white";
+
+  // 悬浮投影
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 7;
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.restore();
+
+  // 主体渐变：上亮下暗，中央偏透以保留网格可见度
+  const c = isWhite ? [70,120,190] : [190,70,70];
+  const g = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+  g.addColorStop(0,   `rgba(${c[0]+25},${c[1]+25},${c[2]+25},0.62)`);
+  g.addColorStop(0.5, `rgba(${c[0]},${c[1]},${c[2]},0.42)`);
+  g.addColorStop(1,   `rgba(${Math.max(0,c[0]-25)},${Math.max(0,c[1]-25)},${Math.max(0,c[2]-25)},0.6)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+
+  // 斜面亮边（上、左）与暗边（下、右），制造立体隆起
+  const b = 3;
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.fillRect(r.x, r.y, r.w, b);
+  ctx.fillRect(r.x, r.y, b, r.h);
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(r.x, r.y + r.h - b, r.w, b);
+  ctx.fillRect(r.x + r.w - b, r.y, b, r.h);
+}
+
+// 王庭装饰：金色双线边框 + 四角铜钉 + 中央王座徽记
+function drawPalaceDecor(P, side) {
+  const r = palaceRect(P);
+  const isWhite = side === "white";
+  const accent = isWhite ? "#e8c34a" : "#d44848";
+
+  // 双线金边
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+  ctx.strokeStyle = "rgba(255,225,140,0.55)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10);
+
+  // 四角铜钉
+  const off = 9;
+  const corners = [[r.x+off, r.y+off],[r.x+r.w-off, r.y+off],
+                   [r.x+off, r.y+r.h-off],[r.x+r.w-off, r.y+r.h-off]];
+  ctx.fillStyle = accent;
+  for (const [cx, cy] of corners) {
+    ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // 中央王座徽记：同心圆 + 浅辉光
+  const mx = r.x + r.w/2, my = r.y + r.h/2;
+  ctx.save();
+  ctx.fillStyle = isWhite ? "rgba(255,255,255,0.10)" : "rgba(255,200,200,0.10)";
+  ctx.beginPath(); ctx.arc(mx, my, CELL*0.42, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = isWhite ? "rgba(255,255,255,0.5)" : "rgba(255,210,210,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(mx, my, CELL*0.42, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx, my, CELL*0.28, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
 }
 
 function drawHighlights() {
@@ -857,12 +940,24 @@ function drawPieces() {
       ctx.restore();
     }
 
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 2;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
     ctx.fillStyle = p.side === "white" ? "#f8f3e0" : "#1a1a1a";
     ctx.fill();
+    ctx.restore();
+    // 顶部高光弧，增强球面感
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, r, Math.PI*1.15, Math.PI*1.85);
+    ctx.strokeStyle = p.side === "white" ? "rgba(255,255,255,0.55)" : "rgba(120,120,120,0.4)";
+    ctx.lineWidth = isBig ? 2 : 1.2;
+    ctx.stroke();
+    ctx.restore();
     ctx.lineWidth = isBig ? 2.5 : 1.5;
     ctx.strokeStyle = p.side === "white" ? "#222" : "#000";
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
 
     // 文字
     let label;
