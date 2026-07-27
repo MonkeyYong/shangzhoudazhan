@@ -13,16 +13,19 @@
     background: #2b2b2b;
     color: #eee;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
   }
-  #app { display: flex; gap: 16px; padding: 16px; }
+  #app { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
   #board-wrap { background: #c9a063; padding: 8px; border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,.5); }
   canvas { display: block; cursor: pointer; }
   #panel {
     width: 260px; flex: 0 0 260px;
+    height: 656px; /* 与 #board-wrap 等高（canvas 640 + 内边距 8*2） */
     background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
     padding: 14px; font-size: 14px; line-height: 1.6;
+    overflow: hidden;
+    display: flex; flex-direction: column;
   }
   #panel h1 { font-size: 20px; margin: 0 0 8px; text-align: center; letter-spacing: 4px; }
   #panel .sep { border: 0; border-top: 1px solid #444; margin: 10px 0; }
@@ -42,12 +45,15 @@
   }
   #hint { min-height: 48px; color: #9cd; font-size: 13px; margin-top: 8px; }
   #rules {
-    margin-top: 10px; max-height: 0; overflow: hidden;
-    transition: max-height .25s ease; font-size: 12.5px; color: #ccc;
+    display: none;
+    width: 320px; height: 656px; /* 与右面板同高，独立于其右侧 */
+    background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
+    padding: 14px; font-size: 13px; line-height: 1.65; color: #ccc;
+    overflow-y: auto;
   }
-  #rules.open { max-height: 480px; overflow: auto; }
-  #rules h3 { font-size: 13px; margin: 8px 0 4px; color: #fc6; }
-  #rules p, #rules li { margin: 3px 0; }
+  #rules.open { display: block; }
+  #rules h3 { font-size: 14px; margin: 10px 0 4px; color: #fc6; }
+  #rules p, #rules li { margin: 4px 0; }
   .badge { font-size: 12px; padding: 1px 6px; border-radius: 8px; background: #333; }
   .w-badge { color: #fff; background: #777; }
   .b-badge { color: #000; background: #ccc; }
@@ -59,7 +65,7 @@
   <div id="board-wrap">
     <canvas id="board" width="640" height="640"></canvas>
   </div>
-  <div id="panel">
+  <div id="panel">  <!-- 右面板内容结束 -->
     <h1>商周大战</h1>
     <hr class="sep">
     <div class="row"><span>当前回合</span><span id="turn" class="turn white">白方</span></div>
@@ -81,24 +87,29 @@
     <button id="btn-rules">规则 ▾</button>
     <hr class="sep">
     <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
-    <div id="rules">
-      <h3>移动</h3>
-      <p>横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
-      <h3>禁锢与解锁</h3>
-      <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。</p>
-      <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
-      <p>主动解锁：己方任意棋子移至武王行动范围（2 格）即解除禁锢。</p>
-      <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
-      <h3>分身</h3>
-      <p>该方武王首次移动后解锁分身能力。此后士兵进入己方武王（含分身）行动范围，或武王进入士兵行动范围，可即时将该士兵变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
-      <h3>暴走</h3>
-      <p>武王/分身踏入己方王城即获暴走：可直线斜线走无限格（可穿己方、不可穿敌，吃敌后停）。触发后己方失去分身能力，对方武王全部解除禁锢。</p>
-      <h3>胜负</h3>
-      <p>击杀对方全部武王（含分身）且己方王已解锁则胜。己方王禁锢且小棋子全灭则负。无合法行动则负（停棋负）。</p>
-      <h3>平局</h3>
-      <p>同一局面出现 3 次判平局。</p>
-    </div>
   </div>
+  <!-- 规则面板：独立列于右面板右侧，默认隐藏，由 #btn-rules 切换 -->
+  <aside id="rules">
+    <h3>移动</h3>
+    <p>横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
+    <h3>禁锢与解锁</h3>
+    <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。</p>
+    <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
+    <p>主动解锁：己方任意棋子移至武王行动范围（2 格）即解除禁锢。</p>
+    <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
+    <h3>分身</h3>
+    <p>该方武王首次移动后解锁分身能力。此后士兵进入己方武王（含分身）行动范围，或武王进入士兵行动范围，可即时将该士兵变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
+    <h3>暴走</h3>
+    <p>武王/分身踏入己方王城即获暴走：可直线斜线走无限格（可穿己方、不可穿敌，吃敌后停）。触发后己方失去分身能力，对方武王全部解除禁锢。</p>
+    <h3>胜负</h3>
+    <p>击杀对方全部武王（含分身）且己方王已解锁则胜。己方王禁锢且小棋子全灭则负。无合法行动则负（停棋负）。</p>
+    <h3>平局</h3>
+    <p>同一局面出现 3 次判平局。</p>
+    <h3>悔棋</h3>
+    <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
+    <h3>开局档位</h3>
+    <p>小局 10 子 / 标准 14 子 / 大战 18 子（默认）/ 兵海 22 子，切换档位自动新局。</p>
+  </aside>
 </div>
 
 <script>
@@ -210,8 +221,8 @@ function inPalace(side, col, row) {
  * ========================================================= */
 const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
 
-// 合法移动目标（含吃子），已考虑路径阻挡。imprisoned 返回空。
-function legalMoves(piece) {
+// 可达范围：路径不穿敌、吃敌后停；不限制目标是否无敌。用于禁锢覆盖统计。
+function reachableCells(piece) {
   const moves = [];
   if (piece.state === "imprisoned_invincible") return moves;
   const maxStep = piece.state === "berserk" ? 18 : 2;
@@ -226,12 +237,20 @@ function legalMoves(piece) {
         moves.push({ col: nc, row: nr, capture: true });
         break; // 吃敌后停；不可越过敌
       } else {
-        // 己方：可穿过（不落子），继续下一步
-        continue;
+        continue; // 己方可穿过
       }
     }
   }
   return moves;
+}
+
+// 合法移动目标：在可达范围基础上，过滤掉无敌武王（hasMoved=false 的 king 不可被吃）。
+function legalMoves(piece) {
+  return reachableCells(piece).filter(m => {
+    if (!m.capture) return true;
+    const t = pieceAt(m.col, m.row);
+    return !(t && t.type === "king" && !t.hasMoved);
+  });
 }
 
 // 武王理论行动范围（2格几何 / 暴走无限射线），忽略阻挡。用于主动解锁与分身触发。
@@ -248,13 +267,13 @@ function theoreticalRange(king) {
   return set;
 }
 
-// 覆盖武王的敌方棋子数是否 >=2
+// 覆盖武王的敌方棋子数是否 >=2（按"可达范围"统计，无敌方无敌王也参与覆盖）
 function isImprisoned(king) {
   let n = 0;
   for (const p of pieces) {
     if (p.side === king.side) continue;       // 只看敌方
     if (p.state === "imprisoned_invincible") continue; // 禁锢棋子不能动，不计
-    const moves = legalMoves(p);
+    const moves = reachableCells(p);
     for (const m of moves) {
       if (m.col === king.col && m.row === king.row) { n++; break; }
     }
