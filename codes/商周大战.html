@@ -36,6 +36,10 @@
   }
   #panel button:hover { background: #4a4a4a; }
   #panel button:disabled { opacity: .4; cursor: default; }
+  #panel select {
+    background: #3a3a3a; color: #eee; border: 1px solid #666; border-radius: 4px;
+    padding: 5px 8px; font-size: 13px; cursor: pointer; margin-left: 4px;
+  }
   #hint { min-height: 48px; color: #9cd; font-size: 13px; margin-top: 8px; }
   #rules {
     margin-top: 10px; max-height: 0; overflow: hidden;
@@ -64,8 +68,16 @@
     <div class="row"><span>分身</span><span><span class="w-badge badge" id="w-clone">白0</span> / <span class="b-badge badge" id="b-clone">黑0</span></span></div>
     <div class="row"><span>步数</span><span id="steps">0</span></div>
     <hr class="sep">
+    <label>开局<select id="preset">
+      <option value="small">小局 (10子)</option>
+      <option value="standard">标准 (14子)</option>
+      <option value="battle" selected>大战 (18子)</option>
+      <option value="army">兵海 (22子)</option>
+    </select></label>
+    <hr class="sep">
     <button id="btn-new">新局</button>
     <button id="btn-undo">悔棋</button>
+    <button id="btn-redo">撤销悔棋</button>
     <button id="btn-rules">规则 ▾</button>
     <hr class="sep">
     <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
@@ -102,6 +114,41 @@ const MARGIN = 32, CELL = 32;
 const WHITE_PALACE = { c0: 7, c1: 11, r0: 0, r1: 3 };  // 白方(底部) H-M / 1-4
 const BLACK_PALACE = { c0: 7, c1: 11, r0: 15, r1: 18 }; // 黑方(顶部) H-M / 16-19
 
+/* =========================================================
+ * 开局配置：每档=1 王 + 3 围困兵 + N 机动兵，保持 K10 中心对称
+ * ========================================================= */
+const BASE_PIECES = [
+  ["white","king",  9,18], ["black","king",  9, 0],
+  // 围困武王的敌军 3 兵（每方武王被 3 名敌兵覆盖 → 禁锢生效）
+  ["black","soldier",7,18], ["black","soldier",9,16], ["black","soldier",11,18],
+  ["white","soldier",7, 0], ["white","soldier",9, 2], ["white","soldier",11, 0],
+];
+// 机动兵层级（白方坐标，黑方由中心对称生成）
+const MOBILE_TIERS = [
+  [["white","soldier",9, 5]],                         // tier1：中路 1 兵
+  [["white","soldier",6, 4], ["white","soldier",12,4]], // tier2：第4行侧翼 2 兵
+  [["white","soldier",5, 5], ["white","soldier",13,5]], // tier3：第5行外延 2 兵
+  [["white","soldier",4, 7], ["white","soldier",14,7]], // tier4：第7行纵深 2 兵
+];
+function buildMobile(tierCount) {
+  const out = [];
+  for (let i = 0; i < tierCount; i++) {
+    for (const [s, type, c, r] of MOBILE_TIERS[i]) {
+      const opp = s === "white" ? "black" : "white";
+      out.push([s,   type, c,     r]);
+      out.push([opp, type, 18 - c, 18 - r]);
+    }
+  }
+  return out;
+}
+const PRESETS = {
+  small:    { name: "小局",  tiers: 1 }, // 1 机动/方 → 10 子
+  standard: { name: "标准",  tiers: 2 }, // 3 机动/方 → 14 子
+  battle:   { name: "大战",  tiers: 3 }, // 5 机动/方 → 18 子（默认）
+  army:     { name: "兵海",  tiers: 4 }, // 7 机动/方 → 22 子
+};
+const PRESET_TOTALS = { small: 10, standard: 14, battle: 18, army: 22 };
+
 let pieces = [];
 let turn = "white";          // 当前回合方
 let selected = null;        // 选中的棋子对象
@@ -113,33 +160,18 @@ let gameOver = null;        // null | {winner:"white"|"black"|"draw"}
 let sideLostClone = { white: false, black: false };       // 暴走后己方失去分身能力
 let sideCloneUnlocked = { white: false, black: false };    // 武王首次移动后才解锁分身能力
 let positionCounts = new Map();
-let history = [];             // 悔棋快照栈：每次落子前压入，悔棋时弹出
+let currentPreset = "battle";  // 当前开局档位
+let undoStack = [];            // 悔棋栈：每次落子前压入，悔棋时弹出
+let redoStack = [];            // 撤销悔棋栈：悔棋时压入，重做时弹出；新动作会清空
 
 let nextId = 1;
 function makeId() { return nextId++; }
 
-// 初始局面
+// 初始局面（按当前档位装配：基础 8 子 + 机动兵）
 function initPieces() {
   nextId = 1;
-  const data = [
-    // 武王（互困于对方王城，初始无敌禁锢）
-    ["white","king",  9,18],
-    ["black","king",  9, 0],
-    // 围困武王的敌军 3 兵（每方武王被 3 名敌兵覆盖 → 禁锢生效）
-    ["black","soldier",7,18],
-    ["black","soldier",9,16],
-    ["black","soldier",11,18],
-    ["white","soldier",7, 0],
-    ["white","soldier",9, 2],
-    ["white","soldier",11, 0],
-    // 中场前哨 3 兵（中心对称：白方下半盘 / 黑方上半盘）
-    ["white","soldier",6, 4],
-    ["white","soldier",9, 5],
-    ["white","soldier",12,4],
-    ["black","soldier",12,14],
-    ["black","soldier",9, 13],
-    ["black","soldier",6, 14],
-  ];
+  const preset = PRESETS[currentPreset];
+  const data = BASE_PIECES.concat(buildMobile(preset.tiers));
   pieces = data.map(d => ({
     id: makeId(), side: d[0], type: d[1],
     col: d[2], row: d[3],
@@ -430,7 +462,7 @@ function announce(term) {
   else hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
 }
 
-/* ----- 悔棋：落子前快照，悔棋时恢复 ----- */
+/* ----- 悔棋 / 撤销悔棋：落子前快照入 undoStack；悔棋压 redoStack；新动作清 redoStack ----- */
 function snapshot() {
   return {
     pieces: pieces.map(p => ({ ...p })),
@@ -441,10 +473,7 @@ function snapshot() {
     gameOver: gameOver ? { ...gameOver } : null,
   };
 }
-function pushHistory() { history.push(snapshot()); }
-function undo() {
-  if (history.length === 0) return;
-  const s = history.pop();
+function restoreSnapshot(s) {
   pieces = s.pieces;
   turn = s.turn;
   stepCount = s.stepCount;
@@ -453,7 +482,23 @@ function undo() {
   positionCounts = s.positionCounts;
   gameOver = s.gameOver;
   selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+}
+function pushHistory() {
+  undoStack.push(snapshot());
+  redoStack = []; // 新动作使撤销悔棋失效
+}
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(snapshot());
+  restoreSnapshot(undoStack.pop());
   document.getElementById("hint").textContent = "已悔棋，撤回上一步行棋。";
+  render();
+}
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(snapshot());
+  restoreSnapshot(redoStack.pop());
+  document.getElementById("hint").textContent = "已撤销悔棋，恢复上一步行棋。";
   render();
 }
 
@@ -589,7 +634,8 @@ function updatePanel() {
   document.getElementById("w-clone").textContent = "白" + cloneCount("white");
   document.getElementById("b-clone").textContent = "黑" + cloneCount("black");
   document.getElementById("steps").textContent = stepCount;
-  document.getElementById("btn-undo").disabled = history.length === 0;
+  document.getElementById("btn-undo").disabled = undoStack.length === 0;
+  document.getElementById("btn-redo").disabled = redoStack.length === 0;
 }
 
 /* =========================================================
@@ -655,6 +701,11 @@ function rebuildLegalMap() {
 
 document.getElementById("btn-new").addEventListener("click", newGame);
 document.getElementById("btn-undo").addEventListener("click", undo);
+document.getElementById("btn-redo").addEventListener("click", redo);
+document.getElementById("preset").addEventListener("change", (e) => {
+  currentPreset = e.target.value;
+  newGame();
+});
 document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
 });
@@ -667,7 +718,7 @@ function newGame() {
   sideLostClone = { white: false, black: false };
   sideCloneUnlocked = { white: false, black: false };
   positionCounts = new Map();
-  history = [];
+  undoStack = []; redoStack = [];
   document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
   render();
 }
