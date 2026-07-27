@@ -447,6 +447,8 @@ function finishTurn(piece, moveResult) {
       s.type = "clone";
       s.isClone = true;
       s.state = "free";
+      // 分身直接诞生在己方王城时，视为踏入，按规则 5.6 立即暴走
+      berserkCheck(s);
       recomputeKingStates();
     }
   }
@@ -624,8 +626,7 @@ function drawPieces() {
 
     // 文字
     let label;
-    if (p.type === "king") label = p.side === "white" ? "武" : "纣";
-    else if (p.type === "clone") label = "分";
+    if (p.type === "king" || p.type === "clone") label = p.side === "white" ? "武" : "纣";
     else label = p.side === "white" ? "兵" : "卒";
     ctx.fillStyle = p.side === "white" ? "#222" : "#eee";
     ctx.font = (isBig ? "bold " : "") + (isBig ? 16 : 13) + "px sans-serif";
