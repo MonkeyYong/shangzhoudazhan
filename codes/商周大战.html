@@ -314,8 +314,8 @@
           <button id="btn-replay">复盘本局</button>
           <button id="btn-export">导出棋谱</button>
           <button id="btn-import">导入棋谱</button>
-          <button id="btn-edit-setup" class="span2">摆子 ✎</button>
           <button id="btn-rules">规则<span class="caret">▶</span></button>
+          <button id="btn-edit-setup" class="span2">摆子 ✎</button>
         </div>
       </div>
       <div id="setup-controls">
@@ -987,6 +987,8 @@ function startReplay(moves, preset, label) {
   replayMoves = moves;
   replayIndex = 0;
   if (PRESETS[preset]) currentPreset = preset;
+  document.getElementById("preset").value = currentPreset;
+  syncPresetDropdown();
   applyReplayToIndex(0);
   document.getElementById("hint").textContent =
     "复盘模式（" + (label || "棋谱") + "）：用前一步/后一步回看，点研究可在当前局面继续行棋。";
@@ -1521,6 +1523,7 @@ document.getElementById("preset").addEventListener("change", (e) => {
   }));
   document.addEventListener("click", (e) => { if (!dd.contains(e.target)) setOpen(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+  window.syncPresetDropdown = syncDisplay;
   syncDisplay();
 })();
 
@@ -1545,6 +1548,7 @@ function exportRecord() {
     return;
   }
   const data = { game: "商周大战", preset: currentPreset, moves: moveLog };
+  if (currentPreset === "custom" && Array.isArray(customLayout)) data.layout = customLayout;
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1555,6 +1559,18 @@ function exportRecord() {
   URL.revokeObjectURL(a.href);
   document.getElementById("hint").textContent = "棋谱已导出（" + moveLog.length + " 步）。";
 }
+// 把自定义布局单项规范为数组格式 [side,type,col,row]，非法返回 null（兼容旧对象格式）
+function normLayoutItem(d) {
+  let side, type, col, row;
+  if (Array.isArray(d)) { [side, type, col, row] = d; }
+  else if (d && typeof d === "object") { side = d.side; type = d.type; col = d.col; row = d.row; }
+  else return null;
+  if (side !== "white" && side !== "black") return null;
+  if (type !== "king" && type !== "soldier") return null;
+  col = +col; row = +row;
+  if (!Number.isFinite(col) || !Number.isFinite(row)) return null;
+  return [side, type, col, row];
+}
 function importRecord(e) {
   const f = e.target.files[0];
   if (!f) return;
@@ -1563,7 +1579,16 @@ function importRecord(e) {
     try {
       const data = JSON.parse(reader.result);
       if (!data || !Array.isArray(data.moves)) throw new Error("格式不符");
-      const preset = PRESETS[data.preset] ? data.preset : "battle";
+      const layout = Array.isArray(data.layout)
+        ? data.layout.map(normLayoutItem).filter(Boolean)
+        : null;
+      const isCustom = !!layout || data.preset === "custom";
+      if (isCustom && !layout) {
+        document.getElementById("hint").textContent = "该自定义棋谱未含初始布局，无法还原复盘。";
+        return;
+      }
+      if (isCustom) { customLayout = layout; currentPreset = "custom"; }
+      const preset = isCustom ? "custom" : (PRESETS[data.preset] ? data.preset : "battle");
       const moves = data.moves.map(m => ({
         step: m.step, side: m.side, piece: m.piece,
         from: m.from, to: m.to,
@@ -1652,7 +1677,7 @@ function enterSetup() {
   setupMode = true;
   selected = null; legalMap.clear();
   // 以当前棋盘为起点二次编辑（不清空）；记为自定义档位以便保存
-  if (currentPreset !== "custom") { currentPreset = "custom"; document.getElementById("preset").value = "custom"; }
+  if (currentPreset !== "custom") { currentPreset = "custom"; document.getElementById("preset").value = "custom"; syncPresetDropdown(); }
   setupTool = "white_soldier";
   document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；「退出摆子」放弃修改返回原对局，「校验并开下」保存并开始。";
   render();
@@ -1698,7 +1723,7 @@ function validateSetup() {
 function startFromSetup() {
   const err = validateSetup();
   if (err) { document.getElementById("hint").textContent = "无法开下：" + err; return; }
-  customLayout = pieces.map(p => ({ side: p.side, type: p.type, col: p.col, row: p.row }));
+  customLayout = pieces.map(p => [p.side, p.type, p.col, p.row]);
   saveCustomLayout();
   // 以校验后的状态为起点开始对局
   setupMode = false;
