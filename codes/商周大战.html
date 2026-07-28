@@ -384,7 +384,7 @@
     <h3>悔棋</h3>
     <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
     <h3>开局档位</h3>
-    <p>小局 10 子 / 标准 14 子 / 大战 18 子（默认）/ 兵海 22 子，切换档位自动新局。</p>
+    <p>小局 10 子 / 标准 14 子 / 大战 18 子（默认）/ 兵海 22 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
     <h3>记谱与复盘</h3>
     <p>对局自动记录坐标式棋谱（如「1. 白兵 K6→K8 ×黑卒」），显示于右面板下方，含首动/分身/暴走/终局标记。</p>
     <p>「导出棋谱」保存为 .json 文件；「导入棋谱」加载文件进入复盘模式，可用首步/前一步/后一步/末步逐步回看。「复盘本局」对当前棋谱复盘。</p>
@@ -485,6 +485,11 @@ function saveCustomLayout() {
     const data = pieces.map(p => [p.side, p.type, p.col, p.row]);
     localStorage.setItem(CUSTOM_LAYOUT_KEY, JSON.stringify(data));
   } catch (e) { /* 隐私模式等写失败时静默忽略 */ }
+}
+// 「自定义」选项副标签同步：已存档显示子数（与内置档位一致），未创建显示「自由摆子」
+function syncCustomSub() {
+  const el = document.querySelector('#preset-dd .cd-opt[data-val="custom"] .cd-sub');
+  if (el) el.textContent = (customLayout && customLayout.length) ? customLayout.length + " 子" : "自由摆子";
 }
 
 // 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
@@ -1488,12 +1493,7 @@ document.getElementById("btn-undo").addEventListener("click", undo);
 document.getElementById("btn-redo").addEventListener("click", redo);
 document.getElementById("preset").addEventListener("change", (e) => {
   currentPreset = e.target.value;
-  if (currentPreset === "custom") {
-    // 自定义：保留当前棋盘，进入摆子模式二次编辑（不清空）
-    enterSetup();
-  } else {
-    newGame();
-  }
+  newGame(); // 自定义同内置档位：已存阵容直接开局；尚未创建时 newGame 检测空局自动进摆子
 });
 
 /* ----- 自定义档位下拉：主题化弹层，写回隐藏 #preset 并触发其 change ----- */
@@ -1587,7 +1587,7 @@ function importRecord(e) {
         document.getElementById("hint").textContent = "该自定义棋谱未含初始布局，无法还原复盘。";
         return;
       }
-      if (isCustom) { customLayout = layout; currentPreset = "custom"; }
+      if (isCustom) { customLayout = layout; currentPreset = "custom"; syncCustomSub(); }
       const preset = isCustom ? "custom" : (PRESETS[data.preset] ? data.preset : "battle");
       const moves = data.moves.map(m => ({
         step: m.step, side: m.side, piece: m.piece,
@@ -1725,6 +1725,7 @@ function startFromSetup() {
   if (err) { document.getElementById("hint").textContent = "无法开下：" + err; return; }
   customLayout = pieces.map(p => [p.side, p.type, p.col, p.row]);
   saveCustomLayout();
+  syncCustomSub();
   // 以校验后的状态为起点开始对局
   setupMode = false;
   turn = "white";
@@ -1745,6 +1746,8 @@ function startFromSetup() {
 /* =========================================================
  * 启动
  * ========================================================= */
+customLayout = loadCustomLayout(); // 恢复本浏览器已保存的自定义阵容
+syncCustomSub();
 initPieces();
 render();
 renderScoresheet();
