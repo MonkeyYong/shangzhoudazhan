@@ -129,6 +129,12 @@
   #study-nav .btn-grid { grid-template-columns: 1fr 1fr; }
   .btn-grid .span2 { grid-column: 1 / -1; }
 
+  #btn-rules .caret {
+    display: inline-block; margin-left: 5px; font-size: 9px; line-height: 1;
+    color: var(--gold); transform: rotate(90deg); transition: transform .25s ease;
+  }
+  #panel:has(~ #rules.open) #btn-rules .caret { transform: rotate(0deg); }
+
   .replay-progress-row { margin-top: 5px; font-size: 12px; color: var(--ink-dim); }
   .replay-progress-row #replay-progress { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -230,7 +236,7 @@
           <button id="btn-replay">复盘本局</button>
           <button id="btn-export">导出棋谱</button>
           <button id="btn-import">导入棋谱</button>
-          <button id="btn-rules">规则 ▾</button>
+          <button id="btn-rules">规则<span class="caret">▶</span></button>
         </div>
       </div>
       <div id="replay-controls">
