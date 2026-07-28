@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商周大战</title>
+<!-- ===================== 视觉样式 ===================== -->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: #2b2b2b;
+    color: #eee;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  #app { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+  #board-wrap {
+    background: linear-gradient(135deg, #6b4a26, #4a3015);
+    padding: 10px; border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.6), inset 0 0 0 2px rgba(232,195,74,0.45);
+  }
+  canvas { display: block; cursor: pointer; }
+  :root{
+    --gold: #e8c34a;
+    --gold-soft: rgba(232,195,74,.45);
+    --gold-faint: rgba(232,195,74,.16);
+    --line: #4a3a24;
+    --ink: #efe6d0;
+    --ink-dim: #b3a486;
+  }
+  #panel {
+    width: 260px; flex: 0 0 260px;
+    height: 660px; /* 与 #board-wrap 等高（canvas 640 + 内边距 10*2） */
+    background: linear-gradient(165deg, #2a231a, #1c1710);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.55), inset 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.05);
+    padding: 12px; font-size: 14px; line-height: 1.45;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    color: var(--ink);
+  }
+  #panel h1 {
+    font-size: 20px; line-height: 1.2; margin: 0; text-align: center; letter-spacing: 7px;
+    color: var(--gold); font-weight: 800; flex: 0 0 auto;
+    text-shadow: 0 0 10px rgba(232,195,74,.35), 0 1px 0 rgba(0,0,0,.6);
+  }
+  .plaque-rule { height: 4px; margin: 5px 0 9px; flex: 0 0 auto; border-top: 2px solid var(--gold-soft); border-bottom: 1px solid var(--gold-faint); }
+
+  .sect { margin: 0 0 7px; flex: 0 0 auto; }
+  .sect-grow { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+  .sect-title {
+    font-size: 11px; line-height: 1.2; letter-spacing: 3px; color: var(--ink-dim);
+    display: flex; align-items: center; gap: 8px; margin: 0 0 4px; flex: 0 0 auto;
+  }
+  .sect-title::before { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line)); }
+  .sect-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+
+  .row { display: flex; justify-content: space-between; align-items: center; margin: 2px 0; }
+
+  .turn-banner {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 10px; border-radius: 8px; margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--gold-faint), rgba(232,195,74,.03));
+    border: 1px solid var(--line);
+  }
+  #turn { font-size: 15px; font-weight: 800; letter-spacing: 2px; }
+  #turn.white { color: #f5efdd; }
+  #turn.black { color: #c9c9c9; }
+  .stone-dot {
+    order: -1; width: 18px; height: 18px; border-radius: 50%; flex: 0 0 18px;
+    box-shadow: 0 2px 5px rgba(0,0,0,.5), inset 0 -2px 3px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.5);
+  }
+  #turn.white + .stone-dot { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
+  #turn.black + .stone-dot { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+
+  .king-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px; }
+  .king-card {
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px;
+    background: linear-gradient(160deg, rgba(255,255,255,.03), rgba(0,0,0,.14));
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .king-card .badge { align-self: flex-start; }
+  .kc-state { font-size: 14px; line-height: 1.2; font-weight: 800; letter-spacing: 1px; }
+  .kc-clone { font-size: 11px; line-height: 1.2; color: var(--ink-dim); }
+  .kc-clone b { color: var(--ink); font-size: 12px; font-weight: 700; }
+  .st-imprisoned { color: #7ab8ff; }
+  .st-berserk { color: #ff7a4a; text-shadow: 0 0 8px rgba(255,90,40,.4); }
+  .st-free { color: #8fd98f; }
+  .st-invincible { color: #f0d27a; }
+  .st-dead { color: #777; }
+
+  .steps-row { font-size: 13px; color: var(--ink-dim); }
+  .steps-row #steps { color: var(--ink); font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+
+  .badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; letter-spacing: 1px; font-weight: 700; border: 1px solid transparent; display: inline-block; }
+  .w-badge { color: #2a1a08; background: linear-gradient(160deg, #fff, #e9dcbc 65%, #c4b184); border-color: #b8a676; box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(0,0,0,.4); }
+  .b-badge { color: var(--gold); background: linear-gradient(160deg, #5a5a5a, #232323 60%, #050505); border-color: #000; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.5); }
+
+  .preset-label { display: block; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-bottom: 3px; }
+  #panel select { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  /* 自定义档位下拉（主题化，取代原生弹层） */
+  .cdd { position: relative; flex: 0 0 auto; }
+  .cdd-trigger {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: linear-gradient(160deg, #3a3226, #2a241a); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 11px;
+    font-size: 13px; letter-spacing: .5px; cursor: pointer;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .cdd-trigger:hover { border-color: var(--gold-soft); }
+  .cdd.open .cdd-trigger { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
+  .cdd-val { font-weight: 700; }
+  .cdd-arrow {
+    width: 8px; height: 8px; flex: 0 0 8px; border-right: 2px solid var(--gold); border-bottom: 2px solid var(--gold);
+    transform: rotate(45deg) translateY(-2px); transition: transform .25s ease;
+  }
+  .cdd.open .cdd-arrow { transform: rotate(-135deg) translateY(-2px); }
+  .cdd-pop {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 7px;
+    background: linear-gradient(165deg, #2c2418, #1d1710);
+    border: 1px solid var(--gold-soft); border-radius: 8px;
+    box-shadow: 0 12px 26px rgba(0,0,0,.6), inset 0 0 0 1px var(--gold-faint);
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateY(-6px) scale(.98); transform-origin: top;
+    transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  }
+  .cdd.open .cdd-pop { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); }
+  .cd-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 7px 4px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; background: rgba(255,255,255,.02);
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .cd-opt:hover { background: rgba(232,195,74,.13); border-color: var(--gold-faint); }
+  .cd-opt:active { transform: scale(.96); }
+  .cd-opt.sel { background: rgba(232,195,74,.16); border-color: var(--gold-soft); box-shadow: inset 0 0 0 1px var(--gold-faint); }
+  .cd-name { font-size: 13px; font-weight: 700; color: var(--ink); letter-spacing: 1px; }
+  .cd-opt.sel .cd-name { color: var(--gold); }
+  .cd-sub { font-size: 10px; color: var(--ink-dim); letter-spacing: .5px; }
+  .cd-opt.sel .cd-sub { color: #d8b86a; }
+  .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
+
+  /* 摆子模式面板 */
+  #setup-controls { display: none; }
+  .setup-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 7px; }
+  .sp-chip {
+    display: flex; align-items: center; gap: 6px; justify-content: center;
+    padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+    font-size: 12px; letter-spacing: .5px; color: var(--ink);
+    background: linear-gradient(160deg, #3b3327, #2a241a);
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .sp-chip:hover { border-color: var(--gold-soft); }
+  .sp-chip.sel { border-color: var(--gold); background: linear-gradient(160deg, #5a4a1e, #3f3312); color: #ffe9a8; box-shadow: 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
+  .sp-chip.erase { grid-column: 1 / -1; }
+  .sp-chip.erase.sel { background: linear-gradient(160deg, #5a241e, #3f1410); border-color: #d44848; color: #ffd0c4; box-shadow: 0 0 0 1px rgba(212,72,72,.3); }
+  .sp-dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; box-shadow: inset 0 -2px 3px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.45); }
+  .sp-dot.wk { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
+  .sp-dot.ws { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
+  .sp-dot.bk { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+  .sp-dot.bs { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+  .setup-row { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; }
+  .setup-exit { margin-bottom: 6px; }
+  #btn-setup-exit {
+    width: 100%; background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
+  }
+  #panel #btn-setup-exit:hover:not(:disabled) { background: linear-gradient(160deg, #6e2c24, #4d1812); border-color: #ff6a5a; }
+  #btn-setup-cancel { color: #d8b86a; }
+
+  #panel button {
+    background: linear-gradient(160deg, #3b3327, #2a241a); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 6px; cursor: pointer; font-size: 12px; letter-spacing: .5px;
+    transition: transform .12s, border-color .18s, box-shadow .18s, background .18s;
+    box-shadow: 0 2px 4px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  #panel button:hover:not(:disabled) {
+    border-color: var(--gold-soft); background: linear-gradient(160deg, #473d2c, #332b1e);
+    box-shadow: 0 3px 8px rgba(0,0,0,.4), 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08);
+    transform: translateY(-1px);
+  }
+  #panel button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+  #panel button:disabled { opacity: .35; cursor: default; }
+  .btn-primary { background: linear-gradient(160deg, #5a4a1e, #3f3312); color: #ffe9a8; border-color: #8a6d2a; }
+  #panel .btn-primary:hover:not(:disabled) { background: linear-gradient(160deg, #6b5824, #4a3c16); border-color: var(--gold); }
+  .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #study-nav .btn-grid { grid-template-columns: 1fr 1fr; }
+  .btn-grid .span2 { grid-column: 1 / -1; }
+
+  #btn-rules .caret {
+    display: inline-block; margin-left: 5px; font-size: 9px; line-height: 1;
+    color: var(--gold); transform: rotate(90deg); transition: transform .25s ease;
+  }
+  #panel:has(~ #rules.open) #btn-rules .caret { transform: rotate(0deg); }
+
+  .replay-progress-row { margin-top: 5px; font-size: 12px; color: var(--ink-dim); }
+  .replay-progress-row #replay-progress { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  #hint {
+    color: #cfe0f0; font-size: 13px; line-height: 1.5;
+    margin: 0 0 6px; padding: 6px 10px; flex: 0 0 auto;
+    border-left: 3px solid var(--gold); border-radius: 0 6px 6px 0;
+    background: linear-gradient(90deg, rgba(232,195,74,.07), transparent);
+  }
+  #movelist {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    font-size: 12px; line-height: 1.5;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: rgba(0,0,0,.22); padding: 5px;
+  }
+  #movelist .mv { padding: 3px 8px; border-radius: 4px; white-space: pre; border-left: 2px solid transparent; transition: background .15s; }
+  #movelist .mv[data-i] { cursor: pointer; }
+  #movelist .mv:nth-child(even) { background: rgba(255,255,255,.025); }
+  #movelist .mv:hover { background: rgba(232,195,74,.08); }
+  #movelist .mv.cur { background: rgba(232,195,74,.14); border-left-color: var(--gold); color: #ffe9a8; }
+  #movelist .mv.st { color: #9ec8e8; }
+  #movelist .mv.st.cur { color: #ffe9a8; }
+  #movelist::-webkit-scrollbar { width: 8px; }
+  #movelist::-webkit-scrollbar-track { background: transparent; }
+  #movelist::-webkit-scrollbar-thumb { background: #4a3a24; border-radius: 4px; }
+  #movelist::-webkit-scrollbar-thumb:hover { background: #6a5432; }
+
+  #rules {
+    display: none;
+    width: 320px; height: 660px; /* 与右面板同高，独立于其右侧 */
+    background: linear-gradient(165deg, #2a231a, #1c1710);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.55), inset 0 0 0 1px var(--gold-faint);
+    padding: 14px; font-size: 13px; line-height: 1.65; color: #ccc;
+    overflow-y: auto;
+  }
+  #rules.open { display: block; }
+  #rules h3 { font-size: 14px; margin: 10px 0 4px; color: var(--gold); }
+  #rules p, #rules li { margin: 4px 0; }
+  #rules::-webkit-scrollbar { width: 8px; }
+  #rules::-webkit-scrollbar-thumb { background: #4a3a24; border-radius: 4px; }
+
+  #replay-controls { display: none; }
+  #study-nav { display: none; }
+  #file-import { display: none; }
+</style>
+</head>
+<body>
+<!-- ===================== 布局 ===================== -->
+<div id="app">
+  <div id="board-wrap">
+    <canvas id="board" width="640" height="640"></canvas>
+  </div>
+  <div id="panel">
+    <h1>商周大战</h1>
+    <div class="plaque-rule"></div>
+
+    <!-- 局势 -->
+    <section class="sect">
+      <div class="sect-title">局 势</div>
+      <div class="turn-banner">
+        <span id="turn" class="turn white">白方</span>
+        <span class="stone-dot"></span>
+      </div>
+      <div class="king-cards">
+        <div class="king-card">
+          <span class="badge w-badge">周武王</span>
+          <span class="kc-state st-imprisoned" id="w-king">禁锢</span>
+          <span class="kc-clone">分身 <b id="w-clone">0</b></span>
+        </div>
+        <div class="king-card">
+          <span class="badge b-badge">商纣王</span>
+          <span class="kc-state st-imprisoned" id="b-king">禁锢</span>
+          <span class="kc-clone">分身 <b id="b-clone">0</b></span>
+        </div>
+      </div>
+      <div class="row steps-row"><span>回合步数</span><span id="steps">0</span></div>
+    </section>
+
+    <!-- 开局 -->
+    <section class="sect">
+      <div class="sect-title">开 局</div>
+      <label class="preset-label" for="preset">档位</label>
+      <div class="cdd" id="preset-dd">
+        <select id="preset" aria-hidden="true" tabindex="-1">
+          <option value="small">小局 (14子)</option>
+          <option value="battle" selected>大战 (22子)</option>
+          <option value="final">决战 (34子)</option>
+          <option value="custom">自定义</option>
+        </select>
+        <button type="button" class="cdd-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="cdd-val"></span><span class="cdd-arrow"></span>
+        </button>
+        <div class="cdd-pop" role="listbox">
+          <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小局</span><span class="cd-sub">14 子</span></div>
+          <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">22 子</span></div>
+          <div class="cd-opt" data-val="final" role="option"><span class="cd-name">决战</span><span class="cd-sub">34 子</span></div>
+          <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 操作 -->
+    <section class="sect">
+      <div class="sect-title">操 作</div>
+      <div id="play-controls">
+        <div class="btn-grid">
+          <button id="btn-new" class="btn-primary span2">新局</button>
+          <button id="btn-undo">悔棋</button>
+          <button id="btn-redo">撤销悔棋</button>
+          <button id="btn-replay">复盘本局</button>
+          <button id="btn-export">导出棋谱</button>
+          <button id="btn-import">导入棋谱</button>
+          <button id="btn-rules">规则<span class="caret">▶</span></button>
+          <button id="btn-edit-setup" class="span2">摆子 ✎</button>
+        </div>
+      </div>
+      <div id="setup-controls">
+        <div class="setup-palette" id="setup-palette">
+          <div class="sp-chip" data-tool="white_king"><span class="sp-dot wk"></span>周武王</div>
+          <div class="sp-chip" data-tool="white_soldier"><span class="sp-dot ws"></span>周兵</div>
+          <div class="sp-chip" data-tool="black_king"><span class="sp-dot bk"></span>商纣王</div>
+          <div class="sp-chip" data-tool="black_soldier"><span class="sp-dot bs"></span>商卒</div>
+          <div class="sp-chip erase" data-tool="erase">橡皮擦</div>
+        </div>
+        <div class="setup-exit">
+          <button id="btn-setup-exit">退出摆子 ✕</button>
+        </div>
+        <div class="setup-row">
+          <button id="btn-setup-clear">清空</button>
+          <button id="btn-setup-cancel">取消</button>
+          <button id="btn-setup-start" class="btn-primary">校验并开下</button>
+        </div>
+      </div>
+      <div id="replay-controls">
+        <div id="replay-nav">
+          <div class="btn-grid">
+            <button id="btn-first">首步</button>
+            <button id="btn-prev">前一步</button>
+            <button id="btn-next">后一步</button>
+            <button id="btn-last">末步</button>
+            <button id="btn-study" class="btn-primary">研究</button>
+            <button id="btn-exit-replay">退出</button>
+          </div>
+        </div>
+        <div id="study-nav">
+          <div class="btn-grid">
+            <button id="btn-study-undo">悔棋</button>
+            <button id="btn-exit-study">退出研究</button>
+          </div>
+        </div>
+        <div class="row replay-progress-row"><span>复盘进度</span><span id="replay-progress">0/0</span></div>
+      </div>
+    </section>
+
+    <!-- 棋谱 -->
+    <section class="sect sect-grow">
+      <div class="sect-title">棋 谱</div>
+      <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
+      <div id="movelist"></div>
+    </section>
+  </div>
+  <input type="file" id="file-import" accept=".json,application/json">
+  <!-- 规则面板：独立列于右面板右侧，默认隐藏，由 #btn-rules 切换 -->
+  <aside id="rules">
+    <h3>移动</h3>
+    <p>横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
+    <h3>禁锢与解锁</h3>
+    <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。</p>
+    <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
+    <p>主动解锁：己方任意棋子移至武王行动范围（2 格）即解除禁锢。</p>
+    <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
+    <h3>分身</h3>
+    <p>该方武王首次移动后解锁分身能力。此后士兵进入己方武王（含分身）行动范围，或武王进入士兵行动范围，可即时将该士兵变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
+    <h3>暴走</h3>
+    <p>武王/分身踏入己方王城即获暴走：可直线斜线走无限格（可穿己方、不可穿敌，吃敌后停）。触发后己方失去分身能力，对方武王全部解除禁锢。</p>
+    <h3>胜负</h3>
+    <p>击杀对方全部武王（含分身）且己方王已解锁则胜。己方王禁锢且小棋子全灭则负。无合法行动则负（停棋负）。</p>
+    <h3>平局</h3>
+    <p>同一局面出现 3 次判平局。</p>
+    <h3>悔棋</h3>
+    <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
+    <h3>开局档位</h3>
+    <p>小局 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
+    <h3>记谱与复盘</h3>
+    <p>对局自动记录坐标式棋谱（如「1. 白兵 K6→K8 ×黑卒」），显示于右面板下方，含首动/分身/暴走/终局标记。</p>
+    <p>「导出棋谱」保存为 .json 文件；「导入棋谱」加载文件进入复盘模式，可用首步/前一步/后一步/末步逐步回看。「复盘本局」对当前棋谱复盘。</p>
+    <p>复盘时点「研究」可在当前局面继续行棋（仍按回合交替走子）；研究着法以蓝色显示，悔棋可逐手撤回，「退出研究」返回复盘浏览。</p>
+  </aside>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+ * 数据层
+ * ========================================================= */
+const SIZE = 19;
+const COL_LETTERS = "ABCDEFGHJKLMNOPQRST"; // 跳过 I
+const MARGIN = 32, CELL = 32;
+
+// 王城（内部坐标 row=0 对应棋盘第1行=底部）
+const WHITE_PALACE = { c0: 7, c1: 11, r0: 0, r1: 3 };  // 白方(底部) H-M / 1-4
+const BLACK_PALACE = { c0: 7, c1: 11, r0: 15, r1: 18 }; // 黑方(顶部) H-M / 16-19
+
+/* =========================================================
+ * 开局配置：3 个固定档位（小局/大战/决战），摆法见 docs 截图
+ * 仅列白方半局（武王+兵），黑方由中心对称 (18-c,18-r) 换色生成，保证 K10 对称
+ * ========================================================= */
+const WHITE_HALF = {
+  small: [ // 14 子
+    ["king",9,18],
+    ["soldier",7,0],["soldier",11,0],["soldier",9,2],
+    ["soldier",6,4],["soldier",12,4],["soldier",9,6],
+  ],
+  battle: [ // 22 子（默认）
+    ["king",9,18],
+    ["soldier",7,0],["soldier",11,0],["soldier",9,2],
+    ["soldier",7,3],["soldier",11,3],
+    ["soldier",5,5],["soldier",9,5],["soldier",13,5],
+    ["soldier",7,7],["soldier",11,7],
+  ],
+  final: [ // 34 子
+    ["king",9,18],
+    ["soldier",7,0],["soldier",11,0],
+    ["soldier",5,1],["soldier",13,1],
+    ["soldier",9,2],
+    ["soldier",3,3],["soldier",7,3],["soldier",11,3],["soldier",15,3],
+    ["soldier",5,5],["soldier",9,5],["soldier",13,5],
+    ["soldier",3,7],["soldier",7,7],["soldier",11,7],["soldier",15,7],
+  ],
+};
+function buildLayout(key) {
+  const out = [];
+  for (const [type, c, r] of WHITE_HALF[key]) {
+    out.push(["white", type, c, r]);
+    out.push(["black", type, 18 - c, 18 - r]);
+  }
+  return out;
+}
+const PRESETS = {
+  small:  { name: "小局", layout: buildLayout("small")  },
+  battle: { name: "大战", layout: buildLayout("battle") },
+  final:  { name: "决战", layout: buildLayout("final")  },
+};
+
+let pieces = [];
+let turn = "white";          // 当前回合方
+let selected = null;        // 选中的棋子对象
+let legalMap = new Map();    // "c,r" -> {capture:bool} 选中棋子的合法目标
+let cloneOfferCells = new Set(); // 可触发分身的格 "c,r"
+let cloneCandidates = [];       // 可变身的士兵对象列表
+let stepCount = 0;
+let gameOver = null;        // null | {winner:"white"|"black"|"draw"}
+let sideLostClone = { white: false, black: false };       // 暴走后己方失去分身能力
+let sideCloneUnlocked = { white: false, black: false };    // 武王首次移动后才解锁分身能力
+let positionCounts = new Map();
+let currentPreset = "battle";  // 当前开局档位
+let undoStack = [];            // 悔棋栈：每次落子前压入，悔棋时弹出
+let redoStack = [];            // 撤销悔棋栈：悔棋时压入，重做时弹出；新动作会清空
+let moveLog = [];              // 记谱：每步行棋记录（坐标式）
+let replayMode = false;        // 复盘模式（禁用落子）
+let replayMoves = [];          // 复盘所用的棋谱
+let replayIndex = 0;           // 复盘已应用的步数
+let studyMode = false;         // 研究模式：在复盘当前局面上继续行棋
+let studyMoves = [];           // 研究着法（附在复盘基线之后）
+let setupMode = false;         // 摆子模式：编辑自定义局面，禁用行棋
+let setupTool = "white_soldier"; // 当前摆子工具：white_king|white_soldier|black_king|black_soldier|erase
+let customLayout = null;       // 自定义局面 [{side,type,col,row}]，null=尚无
+let setupSnapshot = null;      // 进入摆子前的对局快照，供退出/取消还原
+
+let nextId = 1;
+function makeId() { return nextId++; }
+
+// 自定义局面 localStorage 存取
+const CUSTOM_LAYOUT_KEY = "szdz_custom_layout_v1";
+function loadCustomLayout() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_LAYOUT_KEY);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return arr.filter(d => Array.isArray(d) && d.length === 4
+      && (d[0] === "white" || d[0] === "black") && (d[1] === "king" || d[1] === "soldier"));
+  } catch (e) { return null; }
+}
+function saveCustomLayout() {
+  try {
+    const data = pieces.map(p => [p.side, p.type, p.col, p.row]);
+    localStorage.setItem(CUSTOM_LAYOUT_KEY, JSON.stringify(data));
+  } catch (e) { /* 隐私模式等写失败时静默忽略 */ }
+}
+// 「自定义」选项副标签同步：已存档显示子数（与内置档位一致），未创建显示「自由摆子」
+function syncCustomSub() {
+  const el = document.querySelector('#preset-dd .cd-opt[data-val="custom"] .cd-sub');
+  if (el) el.textContent = (customLayout && customLayout.length) ? customLayout.length + " 子" : "自由摆子";
+}
+
+// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
+function initPieces() {
+  nextId = 1;
+  let data;
+  if (currentPreset === "custom") {
+    data = customLayout || [];
+  } else {
+    data = PRESETS[currentPreset].layout;
+  }
+  pieces = data.map(d => ({
+    id: makeId(), side: d[0], type: d[1],
+    col: d[2], row: d[3],
+    state: d[1] === "king" ? "imprisoned_invincible" : "free",
+    isClone: false,
+    hasMoved: false,         // 仅对 king 有意义：首次移动后为 true（失去无敌、不可再禁锢）
+    activelyUnlocked: false, // 主动解锁标记：禁止被动重新禁锢
+  }));
+}
+
+function pieceAt(c, r) {
+  for (const p of pieces) if (p.col === c && p.row === r) return p;
+  return null;
+}
+
+/* =========================================================
+ * 坐标转换
+ * ========================================================= */
+function cellToXY(col, row) {
+  const x = MARGIN + col * CELL;
+  const y = MARGIN + (18 - row) * CELL; // row=0 在底部
+  return [x, y];
+}
+function xyToCell(x, y) {
+  const col = Math.round((x - MARGIN) / CELL);
+  const row = 18 - Math.round((y - MARGIN) / CELL);
+  if (col < 0 || col > 18 || row < 0 || row > 18) return null;
+  return [col, row];
+}
+function inPalace(side, col, row) {
+  const P = side === "white" ? WHITE_PALACE : BLACK_PALACE;
+  return col >= P.c0 && col <= P.c1 && row >= P.r0 && row <= P.r1;
+}
+/* =========================================================
+ * 规则层
+ * ========================================================= */
+const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+// 可达范围：路径不穿敌、吃敌后停；不限制目标是否无敌。用于禁锢覆盖统计。
+function reachableCells(piece) {
+  const moves = [];
+  if (piece.state === "imprisoned_invincible") return moves;
+  const maxStep = piece.state === "berserk" ? 18 : 2;
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= maxStep; s++) {
+      const nc = piece.col + dc * s, nr = piece.row + dr * s;
+      if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+      const occ = pieceAt(nc, nr);
+      if (!occ) {
+        moves.push({ col: nc, row: nr, capture: false });
+      } else if (occ.side !== piece.side) {
+        moves.push({ col: nc, row: nr, capture: true });
+        break; // 吃敌后停；不可越过敌
+      } else {
+        continue; // 己方可穿过
+      }
+    }
+  }
+  return moves;
+}
+
+// 合法移动目标：在可达范围基础上，过滤掉无敌武王（hasMoved=false 的 king 不可被吃）。
+function legalMoves(piece) {
+  return reachableCells(piece).filter(m => {
+    if (!m.capture) return true;
+    const t = pieceAt(m.col, m.row);
+    return !(t && t.type === "king" && !t.hasMoved);
+  });
+}
+
+// 武王理论行动范围（2格几何 / 暴走无限射线），忽略阻挡。用于主动解锁与分身触发。
+function theoreticalRange(king) {
+  const set = new Set();
+  const maxStep = king.state === "berserk" ? 18 : 2;
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= maxStep; s++) {
+      const nc = king.col + dc * s, nr = king.row + dr * s;
+      if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+      set.add(nc + "," + nr);
+    }
+  }
+  return set;
+}
+
+// 覆盖武王的敌方棋子数是否 >=2（按"可达范围"统计，无敌方无敌王也参与覆盖）
+function isImprisoned(king) {
+  let n = 0;
+  for (const p of pieces) {
+    if (p.side === king.side) continue;       // 只看敌方
+    if (p.state === "imprisoned_invincible") continue; // 禁锢棋子不能动，不计
+    const moves = reachableCells(p);
+    for (const m of moves) {
+      if (m.col === king.col && m.row === king.row) { n++; break; }
+    }
+  }
+  return n >= 2;
+}
+
+function kingOf(side) { return pieces.find(p => p.side === side && p.type === "king" && !p.isClone); }
+function bigCount(side) { return pieces.filter(p => p.side === side && (p.type === "king" || p.type === "clone")).length; }
+function cloneCount(side) { return pieces.filter(p => p.side === side && p.type === "clone").length; }
+
+// 被动重算：所有未移动且未主动解锁的武王，按覆盖数定禁锢/解锁
+function recomputeKingStates() {
+  for (const k of pieces) {
+    if (k.type !== "king" || k.isClone) continue;
+    if (k.state === "berserk") continue; // 暴走不变
+    if (k.hasMoved || k.activelyUnlocked) {
+      k.state = "free";
+    } else {
+      k.state = isImprisoned(k) ? "imprisoned_invincible" : "free";
+    }
+  }
+}
+
+// 主动解锁：刚移动的棋子若进入己方禁锢武王的理论范围，解除其禁锢
+function activeUnlockCheck(moved) {
+  for (const k of pieces) {
+    if (k.side !== moved.side) continue;
+    if (k.type !== "king" || k.isClone) continue;
+    if (k.state !== "imprisoned_invincible") continue; // 仅当前禁锢中
+    const range = theoreticalRange(k);
+    if (range.has(moved.col + "," + moved.row)) {
+      k.activelyUnlocked = true; // 标记后由 recompute 置 free，且不再被动重新禁锢
+    }
+  }
+}
+
+// 暴走判定：武王/分身踏入己方王城
+function berserkCheck(moved) {
+  if (moved.type !== "king" && moved.type !== "clone") return;
+  if (moved.state === "berserk") return;
+  if (!inPalace(moved.side, moved.col, moved.row)) return; // inPalace(side)=己方王城
+  moved.state = "berserk";
+  if (moved.type === "king") moved.hasMoved = true; // 暴走必然已移动
+  sideLostClone[moved.side] = true;                 // 己方失去分身能力
+  // 对方所有武王解除无敌禁锢（一次性、不可逆）
+  for (const k of pieces) {
+    if (k.side === moved.side) continue;
+    if (k.type !== "king" || k.isClone) continue;
+    k.hasMoved = true;              // 失去无敌，可被吃，且不可再被禁锢
+    if (k.state !== "berserk") k.state = "free";
+    k.activelyUnlocked = true;
+  }
+}
+
+// 士兵是否在己方任一武王(含分身)理论范围内
+function inAnyFriendlyBigRange(soldier) {
+  for (const k of pieces) {
+    if (k.side !== soldier.side) continue;
+    if (k.type !== "king" && k.type !== "clone") continue;
+    if (theoreticalRange(k).has(soldier.col + "," + soldier.row)) return true;
+  }
+  return false;
+}
+
+// 分身触发（双向）：士兵进入武王范围，或武王进入士兵范围。
+// moved 为本次移动的棋子；返回 true 表示存在可变身的士兵。
+function cloneOfferCheck(moved) {
+  cloneOfferCells.clear();
+  cloneCandidates = [];
+  if (sideLostClone[moved.side]) return false;
+  if (!sideCloneUnlocked[moved.side]) return false; // 须该方武王首次移动后才解锁分身
+  if (bigCount(moved.side) >= 2) return false;
+  if (moved.type === "soldier") {
+    // 情形一：士兵进入武王移动范围
+    if (inAnyFriendlyBigRange(moved)) cloneCandidates.push(moved);
+  } else if (moved.type === "king" || moved.type === "clone") {
+    // 情形二：武王进入小棋子移动范围（等价于：士兵落在武王2格范围内）
+    const range = theoreticalRange(moved);
+    for (const s of pieces) {
+      if (s.side !== moved.side || s.type !== "soldier") continue;
+      if (range.has(s.col + "," + s.row)) cloneCandidates.push(s);
+    }
+  }
+  if (cloneCandidates.length === 0) return false;
+  for (const s of cloneCandidates) cloneOfferCells.add(s.col + "," + s.row);
+  return true;
+}
+
+// 某方是否处于解锁态：任一本体武王非禁锢，或存在分身（分身恒为 free/berserk）
+function sideUnlocked(side) {
+  for (const p of pieces) {
+    if (p.side !== side) continue;
+    if (p.type === "clone") return true;
+    if (p.type === "king" && p.state !== "imprisoned_invincible") return true;
+  }
+  return false;
+}
+function soldiersOf(side) { return pieces.filter(p => p.side === side && p.type === "soldier").length; }
+
+// 胜负判定（不含平局）
+function checkWinLoss() {
+  const wBig = bigCount("white"), bBig = bigCount("black");
+  if (wBig === 0 && sideUnlocked("black")) return { winner: "black" };
+  if (bBig === 0 && sideUnlocked("white")) return { winner: "white" };
+  const wKing = kingOf("white"), bKing = kingOf("black");
+  if (wKing && wKing.state === "imprisoned_invincible" && soldiersOf("white") === 0) return { winner: "black" };
+  if (bKing && bKing.state === "imprisoned_invincible" && soldiersOf("black") === 0) return { winner: "white" };
+  return null;
+}
+
+// 停棋负：轮到一方无合法行动
+function hasAnyMove(side) {
+  for (const p of pieces) {
+    if (p.side !== side) continue;
+    if (legalMoves(p).length > 0) return true;
+  }
+  return false;
+}
+
+function positionHash() {
+  const arr = pieces.map(p => `${p.side[0]}${p.type[0]}${p.col},${p.row},${p.state[0]}${p.hasMoved?1:0}${p.activelyUnlocked?1:0}`)
+                   .sort().join("|");
+  return turn + "|" + arr + "|" + (sideLostClone.white?1:0) + (sideLostClone.black?1:0)
+       + (sideCloneUnlocked.white?1:0) + (sideCloneUnlocked.black?1:0);
+}
+
+/* =========================================================
+ * 记谱
+ * ========================================================= */
+const EVENT_LABEL = { firstMove: "首动", clone: "分身", berserk: "暴走" };
+
+function coordStr(col, row) { return COL_LETTERS[col] + (row + 1); }
+function parseCoord(s) {
+  if (!s || s.length < 2) return null;
+  const col = COL_LETTERS.indexOf(s[0].toUpperCase());
+  const row = parseInt(s.slice(1), 10) - 1;
+  if (col < 0 || isNaN(row) || row < 0 || row > 18) return null;
+  return [col, row];
+}
+function pieceTypeLabel(type, side) {
+  if (type === "soldier") return side === "white" ? "白兵" : "黑卒";
+  return side === "white" ? "白武" : "黑纣";
+}
+function terminalLabel(t) {
+  if (t.winner === "draw") return "平局";
+  const w = t.winner === "white" ? "白" : "黑";
+  return t.stalemate ? (w + "胜(停棋)") : (w + "胜");
+}
+function notationOf(m) {
+  let s = m.step + ". " + pieceTypeLabel(m.piece, m.side) + " " + m.from + "→" + m.to;
+  if (m.capture) s += " ×" + m.capture;
+  if (m.events) for (const e of m.events) s += " " + (EVENT_LABEL[e] || e);
+  if (m.result) s += " " + m.result;
+  return s;
+}
+// 由一次行棋的前后状态构建棋谱记录
+function buildRecord(piece, res, ctx, r) {
+  const events = [];
+  if (ctx.wasFirstKingMove) events.push("firstMove");
+  if (r.cloneHappened) events.push("clone");
+  if (!ctx.wasBerserk && piece.state === "berserk") events.push("berserk");
+  const rec = {
+    step: stepCount,
+    side: piece.side,
+    piece: ctx.moverTypeBefore,
+    from: coordStr(ctx.fromCol, ctx.fromRow),
+    to: coordStr(piece.col, piece.row),
+    capture: res.captured ? pieceTypeLabel(res.captured.type, res.captured.side) : null,
+    events,
+    result: r.terminal ? terminalLabel(r.terminal) : null,
+  };
+  rec.notation = notationOf(rec);
+  return rec;
+}
+
+/* =========================================================
+ * 行动执行
+ * ========================================================= */
+function doMove(piece, col, row) {
+  const target = pieceAt(col, row);
+  let captured = null;
+  if (target && target.side !== piece.side) {
+    captured = target;
+    pieces = pieces.filter(p => p !== target);
+  }
+  piece.col = col;
+  piece.row = row;
+
+  // 武王本体首次移动：失去无敌、可被吃；并解锁本方分身能力
+  if (piece.type === "king" && !piece.isClone && !piece.hasMoved) {
+    piece.hasMoved = true;
+    sideCloneUnlocked[piece.side] = true;
+  }
+
+  // 暴走判定（含对方解禁锢副作用）
+  berserkCheck(piece);
+
+  // 主动解锁
+  activeUnlockCheck(piece);
+
+  // 分身提示（仅士兵且可变身时）
+  let offered = cloneOfferCheck(piece);
+
+  // 被动重算禁锢状态
+  recomputeKingStates();
+
+  return { captured, offered };
+}
+
+// 行动结算（不含 UI）：分身转化 → 胜负/停棋/平局 → 回合切换。
+// cloneDecision 控制是否执行分身转化；返回 { terminal, cloneHappened }。
+function settleMove(piece, moveResult, cloneDecision) {
+  stepCount++;
+  let cloneHappened = false;
+  if (moveResult.offered && cloneCandidates.length > 0 && cloneDecision && bigCount(piece.side) < 2) {
+    const s = cloneCandidates[0]; // 多个候选时取首个（士兵等价，不影响）
+    s.type = "clone";
+    s.isClone = true;
+    s.state = "free";
+    // 分身直接诞生在己方王城时，视为踏入，按规则 5.6 立即暴走
+    berserkCheck(s);
+    recomputeKingStates();
+    cloneHappened = true;
+  }
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+
+  // 胜负判定
+  const term = checkWinLoss();
+  if (term) { gameOver = term; return { terminal: term, cloneHappened }; }
+
+  // 切换回合
+  turn = (turn === "white") ? "black" : "white";
+
+  // 停棋负
+  if (!hasAnyMove(turn)) {
+    gameOver = { winner: (turn === "white" ? "black" : "white"), stalemate: true };
+    return { terminal: gameOver, cloneHappened };
+  }
+
+  // 平局：同一局面出现 3 次
+  const h = positionHash();
+  const c = (positionCounts.get(h) || 0) + 1;
+  positionCounts.set(h, c);
+  if (c >= 3) { gameOver = { winner: "draw" }; return { terminal: gameOver, cloneHappened }; }
+
+  return { terminal: null, cloneHappened };
+}
+
+// 落子后结算：分身（可选即时效果）→ 终局/平局 → 回合切换 → 记谱
+function finishTurn(piece, res, ctx) {
+  let cloneDecision = false;
+  if (res.offered && cloneCandidates.length > 0) {
+    cloneDecision = confirm("士兵与武王相互进入行动范围，是否将该士兵转化为武王分身？");
+  }
+  const r = settleMove(piece, res, cloneDecision);
+  const rec = buildRecord(piece, res, ctx, r);
+  if (studyMode) studyMoves.push(rec); else moveLog.push(rec);
+  if (r.terminal) {
+    selected = null; legalMap.clear();
+    render(); renderScoresheet();
+    announce(r.terminal);
+    return;
+  }
+  render(); renderScoresheet();
+}
+
+function announce(term) {
+  const hint = document.getElementById("hint");
+  if (term.winner === "draw") hint.textContent = "平局！局面重复 3 次。";
+  else if (term.stalemate) hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜（对方无棋可走）！";
+  else hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
+}
+
+/* ----- 悔棋 / 撤销悔棋：落子前快照入 undoStack；悔棋压 redoStack；新动作清 redoStack ----- */
+function snapshot() {
+  return {
+    pieces: pieces.map(p => ({ ...p })),
+    turn, stepCount,
+    sideLostClone: { ...sideLostClone },
+    sideCloneUnlocked: { ...sideCloneUnlocked },
+    positionCounts: new Map(positionCounts),
+    gameOver: gameOver ? { ...gameOver } : null,
+    moveLog: moveLog.slice(),
+  };
+}
+function restoreSnapshot(s) {
+  pieces = s.pieces;
+  turn = s.turn;
+  stepCount = s.stepCount;
+  sideLostClone = s.sideLostClone;
+  sideCloneUnlocked = s.sideCloneUnlocked;
+  positionCounts = s.positionCounts;
+  gameOver = s.gameOver;
+  moveLog = s.moveLog;
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+}
+function pushHistory() {
+  undoStack.push(snapshot());
+  redoStack = []; // 新动作使撤销悔棋失效
+}
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(snapshot());
+  restoreSnapshot(undoStack.pop());
+  document.getElementById("hint").textContent = "已悔棋，撤回上一步行棋。";
+  render();
+  renderScoresheet();
+}
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(snapshot());
+  restoreSnapshot(redoStack.pop());
+  document.getElementById("hint").textContent = "已撤销悔棋，恢复上一步行棋。";
+  render();
+  renderScoresheet();
+}
+
+/* ----- 棋谱渲染 ----- */
+function renderScoresheet() {
+  let list, idx, stBase = 0;
+  if (studyMode) {
+    list = replayMoves.slice(0, replayIndex).concat(studyMoves);
+    idx = replayIndex + studyMoves.length;
+    stBase = replayIndex; // 之后的为研究着法
+  } else if (replayMode) {
+    list = replayMoves; idx = replayIndex;
+  } else {
+    list = moveLog; idx = moveLog.length;
+  }
+  const el = document.getElementById("movelist");
+  const jumpable = replayMode && !studyMode; // 仅复盘浏览态可点击跳转
+  let html = "";
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    let cls = (i + 1 === idx) ? " cur" : "";
+    if (studyMode && i >= stBase) cls += " st";
+    html += '<div class="mv' + cls + '"' + (jumpable ? ' data-i="' + i + '"' : "") + '>'
+          + (m.notation || notationOf(m)) + "</div>";
+  }
+  el.innerHTML = html || '<div style="color:#888">尚无棋谱。</div>';
+  if (jumpable) {
+    el.querySelectorAll(".mv[data-i]").forEach(node => {
+      node.addEventListener("click", () => replayGoto(parseInt(node.dataset.i, 10) + 1));
+    });
+  }
+  const cur = el.querySelector(".mv.cur");
+  if (cur) cur.scrollIntoView({ block: "nearest" });
+}
+
+/* ----- 复盘 / 研究模式：从初始局面按记录重放 ----- */
+function resetState() {
+  initPieces();
+  turn = "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  stepCount = 0; gameOver = null;
+  sideLostClone = { white: false, black: false };
+  sideCloneUnlocked = { white: false, black: false };
+  positionCounts = new Map();
+  undoStack = []; redoStack = [];
+}
+// 按一条棋谱记录执行一步（doMove + settleMove），返回是否成功
+function applyRecord(m) {
+  const from = parseCoord(m.from), to = parseCoord(m.to);
+  if (!from || !to) return false;
+  const p = pieceAt(from[0], from[1]);
+  if (!p) return false;
+  const res = doMove(p, to[0], to[1]);
+  const cloneDecision = !!(m.events && m.events.includes("clone"));
+  settleMove(p, res, cloneDecision);
+  return true;
+}
+// 从初始局面重放：复盘基线 replayMoves[0..replayIndex) + 研究着法 studyMoves
+function applyLine() {
+  resetState();
+  for (let i = 0; i < replayIndex && i < replayMoves.length; i++) {
+    if (!applyRecord(replayMoves[i]) || gameOver) break;
+  }
+  for (let i = 0; i < studyMoves.length; i++) {
+    if (!applyRecord(studyMoves[i]) || gameOver) break;
+  }
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+}
+function applyReplayToIndex(n) {
+  resetState();
+  let applied = 0;
+  for (let i = 0; i < n && i < replayMoves.length; i++) {
+    if (!applyRecord(replayMoves[i]) || gameOver) break;
+    applied = i + 1;
+  }
+  replayIndex = applied;
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+}
+function startReplay(moves, preset, label) {
+  replayMode = true;
+  studyMode = false; studyMoves = [];
+  replayMoves = moves;
+  replayIndex = 0;
+  if (PRESETS[preset]) currentPreset = preset;
+  document.getElementById("preset").value = currentPreset;
+  syncPresetDropdown();
+  applyReplayToIndex(0);
+  document.getElementById("hint").textContent =
+    "复盘模式（" + (label || "棋谱") + "）：用前一步/后一步回看，点研究可在当前局面继续行棋。";
+  render();
+  renderScoresheet();
+}
+function exitReplay() {
+  replayMode = false; studyMode = false; replayMoves = []; replayIndex = 0; studyMoves = [];
+  newGame();
+}
+function replayGoto(n) {
+  if (!replayMode || studyMode) return;
+  n = Math.max(0, Math.min(n, replayMoves.length));
+  applyReplayToIndex(n);
+  render();
+  renderScoresheet();
+}
+/* ----- 研究模式：在复盘当前局面上继续行棋 ----- */
+function enterStudy() {
+  if (!replayMode || studyMode) return;
+  if (gameOver) {
+    document.getElementById("hint").textContent = "当前为终局局面，无法进入研究。请先回退到非终局位置。";
+    return;
+  }
+  studyMode = true; studyMoves = [];
+  applyReplayToIndex(replayIndex); // 以当前复盘位置为干净基线
+  document.getElementById("hint").textContent =
+    "研究模式：可在棋盘上继续行棋（" + (turn === "white" ? "白" : "黑") + "方回合）。悔棋撤回研究着法，退出研究返回复盘。";
+  render();
+  renderScoresheet();
+}
+function exitStudy() {
+  if (!studyMode) return;
+  studyMode = false; studyMoves = [];
+  applyReplayToIndex(replayIndex); // 回到复盘浏览
+  document.getElementById("hint").textContent = "已退出研究，返回复盘浏览。";
+  render();
+  renderScoresheet();
+}
+function studyUndo() {
+  if (!studyMode || studyMoves.length === 0) return;
+  studyMoves.pop();
+  applyLine();
+  document.getElementById("hint").textContent = studyMoves.length === 0
+    ? "已撤回全部研究着法。"
+    : "已撤回上一步研究着法。";
+  render();
+  renderScoresheet();
+}
+
+/* =========================================================
+ * 渲染层
+ * ========================================================= */
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+
+function render() {
+  drawBoard();
+  drawHighlights();
+  drawPieces();
+  updatePanel();
+}
+
+function drawBoard() {
+  // 木质底色：径向渐变营造温润深浅
+  const bg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 80,
+                                      canvas.width/2, canvas.height/2, canvas.width*0.75);
+  bg.addColorStop(0, "#d6b47c");
+  bg.addColorStop(1, "#b8915a");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 王庭立体平台（底座 + 斜面，置于网格之下）
+  drawPalacePlatform(WHITE_PALACE, "white");
+  drawPalacePlatform(BLACK_PALACE, "black");
+
+  // 网格线
+  ctx.strokeStyle = "rgba(58,42,20,0.85)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < SIZE; i++) {
+    let [x1, y1] = cellToXY(i, 0), [x2, y2] = cellToXY(i, 18);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    [x1, y1] = cellToXY(0, i); [x2, y2] = cellToXY(18, i);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  // 王庭装饰（金边 + 徽记，置于网格之上）
+  drawPalaceDecor(WHITE_PALACE, "white");
+  drawPalaceDecor(BLACK_PALACE, "black");
+
+  // 星位
+  const stars = [[3,3],[3,9],[3,15],[9,3],[9,9],[9,15],[15,3],[15,9],[15,15]];
+  ctx.fillStyle = "#3a2a14";
+  for (const [c, r] of stars) {
+    const [x, y] = cellToXY(c, r);
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+  }
+
+  // 坐标
+  ctx.fillStyle = "#3a2a14";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let i = 0; i < SIZE; i++) {
+    const [x, yTop] = cellToXY(i, 18);
+    ctx.fillText(COL_LETTERS[i], x, MARGIN/2);
+    ctx.fillText(COL_LETTERS[i], x, canvas.height - MARGIN/2);
+    const [xL, y] = cellToXY(0, i);
+    ctx.fillText(String(i+1), MARGIN/2, y);
+    ctx.fillText(String(i+1), canvas.width - MARGIN/2, y);
+  }
+}
+
+function palaceRect(P) {
+  const [x1, y1] = cellToXY(P.c0, P.r1);
+  const [x2, y2] = cellToXY(P.c1, P.r0);
+  return { x: x1 - CELL/2, y: y1 - CELL/2, w: x2 - x1 + CELL, h: y2 - y1 + CELL };
+}
+
+// 王庭底座：悬浮投影 + 渐变主体 + 斜面亮暗边（隆起感）
+function drawPalacePlatform(P, side) {
+  const r = palaceRect(P);
+  const isWhite = side === "white";
+
+  // 悬浮投影
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 7;
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.restore();
+
+  // 主体渐变：上亮下暗，中央偏透以保留网格可见度
+  const c = isWhite ? [70,120,190] : [190,70,70];
+  const g = ctx.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+  g.addColorStop(0,   `rgba(${c[0]+25},${c[1]+25},${c[2]+25},0.62)`);
+  g.addColorStop(0.5, `rgba(${c[0]},${c[1]},${c[2]},0.42)`);
+  g.addColorStop(1,   `rgba(${Math.max(0,c[0]-25)},${Math.max(0,c[1]-25)},${Math.max(0,c[2]-25)},0.6)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+
+  // 斜面亮边（上、左）与暗边（下、右），制造立体隆起
+  const b = 3;
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.fillRect(r.x, r.y, r.w, b);
+  ctx.fillRect(r.x, r.y, b, r.h);
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(r.x, r.y + r.h - b, r.w, b);
+  ctx.fillRect(r.x + r.w - b, r.y, b, r.h);
+}
+
+// 王庭装饰：金色双线边框 + 四角铜钉 + 中央王座徽记
+function drawPalaceDecor(P, side) {
+  const r = palaceRect(P);
+  const isWhite = side === "white";
+  const accent = isWhite ? "#e8c34a" : "#d44848";
+
+  // 双线金边
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+  ctx.strokeStyle = "rgba(255,225,140,0.55)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10);
+
+  // 四角铜钉
+  const off = 9;
+  const corners = [[r.x+off, r.y+off],[r.x+r.w-off, r.y+off],
+                   [r.x+off, r.y+r.h-off],[r.x+r.w-off, r.y+r.h-off]];
+  ctx.fillStyle = accent;
+  for (const [cx, cy] of corners) {
+    ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // 中央王座徽记：同心圆 + 浅辉光
+  const mx = r.x + r.w/2, my = r.y + r.h/2;
+  ctx.save();
+  ctx.fillStyle = isWhite ? "rgba(255,255,255,0.10)" : "rgba(255,200,200,0.10)";
+  ctx.beginPath(); ctx.arc(mx, my, CELL*0.42, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = isWhite ? "rgba(255,255,255,0.5)" : "rgba(255,210,210,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(mx, my, CELL*0.42, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(mx, my, CELL*0.28, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawHighlights() {
+  if (setupMode) return;
+  if (!selected) return;
+  // 选中棋子描边
+  const [sx, sy] = cellToXY(selected.col, selected.row);
+  ctx.strokeStyle = "#ffd700";
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(sx, sy, CELL*0.46, 0, Math.PI*2); ctx.stroke();
+
+  // 合法目标
+  for (const [key, info] of legalMap) {
+    const [c, r] = key.split(",").map(Number);
+    const [x, y] = cellToXY(c, r);
+    ctx.fillStyle = info.capture ? "rgba(220,40,40,0.45)" : "rgba(60,200,80,0.4)";
+    ctx.beginPath(); ctx.arc(x, y, CELL*0.42, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawPieces() {
+  for (const p of pieces) {
+    const [x, y] = cellToXY(p.col, p.row);
+    const isBig = p.type === "king" || p.type === "clone";
+    const r = isBig ? CELL*0.42 : CELL*0.30;
+    const isWhite = p.side === "white";
+
+    // 暴走外辉光环
+    if (p.state === "berserk") {
+      ctx.save();
+      ctx.shadowColor = isWhite ? "#fff2a0" : "#ff5a2a";
+      ctx.shadowBlur = 20;
+      ctx.strokeStyle = isWhite ? "rgba(255,240,180,0.55)" : "rgba(255,90,40,0.6)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 地面投影：更柔更散，营造圆润悬浮感
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 9;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 4;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.restore();
+
+    // 球面径向渐变主体（光源左上，多色阶过渡）
+    const grad = ctx.createRadialGradient(
+      x - r*0.38, y - r*0.44, r*0.05,
+      x, y, r * 1.12
+    );
+    if (isWhite) {
+      grad.addColorStop(0,    "#ffffff");
+      grad.addColorStop(0.22, "#fbf5e6");
+      grad.addColorStop(0.6,  "#ecdcb4");
+      grad.addColorStop(1,    "#b8a676");
+    } else {
+      grad.addColorStop(0,    "#7c7c7c");
+      grad.addColorStop(0.22, "#3c3c3c");
+      grad.addColorStop(0.6,  "#1e1e1e");
+      grad.addColorStop(1,    "#020202");
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 底部反射高光弧（圆润关键：底部内侧反光，暗示球面回转）
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.9, Math.PI * 0.18, Math.PI * 0.82, false);
+    ctx.strokeStyle = isWhite ? "rgba(255,255,255,0.28)" : "rgba(150,150,150,0.2)";
+    ctx.lineWidth = r * 0.14;
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.restore();
+
+    // 描边
+    ctx.lineWidth = isBig ? 2.5 : 1.5;
+    ctx.strokeStyle = isWhite ? "#3a2a14" : "#000";
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+
+    // 大棋子内圈：本体金环 / 分身虚环
+    if (p.type === "king") {
+      ctx.strokeStyle = "rgba(232,195,74,0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r*0.66, 0, Math.PI*2); ctx.stroke();
+    } else if (p.type === "clone") {
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "rgba(210,180,140,0.8)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r*0.66, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 镜面高光：大软光斑 + 小亮点（光泽玻璃感）
+    ctx.save();
+    ctx.translate(x - r*0.3, y - r*0.38);
+    ctx.scale(0.6, 0.36);
+    ctx.beginPath(); ctx.arc(0, 0, r*0.75, 0, Math.PI*2);
+    ctx.fillStyle = isWhite ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.18)";
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x - r*0.34, y - r*0.4, r*0.14, 0, Math.PI*2);
+    ctx.fillStyle = isWhite ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.4)";
+    ctx.fill();
+    ctx.restore();
+
+    // 禁锢笼环（仅禁锢中的武王）
+    if (p.state === "imprisoned_invincible") {
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "rgba(120,180,255,0.85)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 文字
+    const label = isBig ? (isWhite ? "武" : "纣") : (isWhite ? "兵" : "卒");
+    ctx.fillStyle = isWhite ? "#2a1a08" : "#eee";
+    ctx.font = (isBig ? "bold " : "") + (isBig ? 16 : 13) + "px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(label, x, y);
+  }
+}
+
+function kingStateText(side) {
+  const k = kingOf(side);
+  if (!k) return "阵亡";
+  if (k.state === "imprisoned_invincible") return "禁锢";
+  if (k.state === "berserk") return "暴走";
+  if (k.hasMoved) return "解锁";
+  return "解锁·无敌";
+}
+// 状态对应的着色 class（见 CSS .st-*）
+function kingStateClass(side) {
+  const k = kingOf(side);
+  if (!k) return "st-dead";
+  if (k.state === "imprisoned_invincible") return "st-imprisoned";
+  if (k.state === "berserk") return "st-berserk";
+  if (k.hasMoved) return "st-free";
+  return "st-invincible";
+}
+
+function updatePanel() {
+  // 摆子态：切换面板、显示摆子计数、禁用行棋/复盘控件
+  if (setupMode) {
+    const cnt = setupPieceCounts();
+    document.getElementById("w-king").textContent = cnt.white_king;
+    document.getElementById("w-king").className = "kc-state st-invincible";
+    document.getElementById("b-king").textContent = cnt.black_king;
+    document.getElementById("b-king").className = "kc-state st-berserk";
+    document.getElementById("w-clone").textContent = cnt.white_soldier;
+    document.getElementById("b-clone").textContent = cnt.black_soldier;
+    document.getElementById("steps").textContent = "—";
+    document.getElementById("turn").textContent = "摆子中";
+    document.getElementById("turn").className = "turn white";
+    document.getElementById("play-controls").style.display = "none";
+    document.getElementById("replay-controls").style.display = "none";
+    document.getElementById("setup-controls").style.display = "block";
+    document.getElementById("preset").disabled = true;
+    document.getElementById("preset-dd").classList.add("is-disabled");
+    document.getElementById("btn-undo").disabled = true;
+    document.getElementById("btn-redo").disabled = true;
+    updateSetupPalette();
+    return;
+  }
+  document.getElementById("setup-controls").style.display = "none";
+  document.getElementById("turn").textContent = gameOver
+    ? (gameOver.winner === "draw" ? "平局" : (gameOver.winner === "white" ? "白方胜" : "黑方胜"))
+    : (turn === "white" ? "白方" : "黑方");
+  document.getElementById("turn").className = "turn " + (turn === "white" ? "white" : "black");
+  const wk = document.getElementById("w-king");
+  wk.textContent = kingStateText("white");
+  wk.className = "kc-state " + kingStateClass("white");
+  const bk = document.getElementById("b-king");
+  bk.textContent = kingStateText("black");
+  bk.className = "kc-state " + kingStateClass("black");
+  document.getElementById("w-clone").textContent = cloneCount("white");
+  document.getElementById("b-clone").textContent = cloneCount("black");
+  document.getElementById("steps").textContent = stepCount;
+  document.getElementById("btn-undo").disabled = undoStack.length === 0;
+  document.getElementById("btn-redo").disabled = redoStack.length === 0;
+
+  // 行棋 / 复盘 / 研究 三态切换
+  const playOn = !replayMode;
+  document.getElementById("play-controls").style.display = playOn ? "block" : "none";
+  document.getElementById("replay-controls").style.display = playOn ? "none" : "block";
+  document.getElementById("preset").disabled = !playOn;
+  document.getElementById("preset-dd").classList.toggle("is-disabled", !playOn);
+  document.getElementById("btn-replay").disabled = (moveLog.length === 0);
+  if (!playOn) {
+    const navOn = !studyMode;
+    document.getElementById("replay-nav").style.display = navOn ? "block" : "none";
+    document.getElementById("study-nav").style.display = navOn ? "none" : "block";
+    if (navOn) {
+      document.getElementById("replay-progress").textContent = replayIndex + "/" + replayMoves.length;
+      document.getElementById("btn-first").disabled = replayIndex <= 0;
+      document.getElementById("btn-prev").disabled = replayIndex <= 0;
+      document.getElementById("btn-next").disabled = replayIndex >= replayMoves.length;
+      document.getElementById("btn-last").disabled = replayIndex >= replayMoves.length;
+      document.getElementById("btn-study").disabled = !!gameOver;
+    } else {
+      document.getElementById("replay-progress").textContent =
+        "研究 " + studyMoves.length + " 手（基线 " + replayIndex + "/" + replayMoves.length + "）";
+      document.getElementById("btn-study-undo").disabled = (studyMoves.length === 0);
+    }
+  }
+}
+
+/* =========================================================
+ * 交互层
+ * ========================================================= */
+canvas.addEventListener("click", (e) => {
+  if (replayMode && !studyMode) return;
+  if (gameOver) return;
+  const rect = canvas.getBoundingClientRect();
+  const x0 = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y0 = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const cell0 = xyToCell(x0, y0);
+  if (setupMode) {
+    if (!cell0) return;
+    const [c, r] = cell0;
+    const hint = document.getElementById("hint");
+    if (setupTool === "erase") {
+      const t = pieceAt(c, r);
+      if (t) { pieces = pieces.filter(p => p !== t); render(); }
+      return;
+    }
+    const [side, type] = setupTool.split("_");
+    if (type === "king" && pieces.some(p => p.side === side && p.type === "king")) {
+      hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先橡皮删除再放置。";
+      return;
+    }
+    const occ = pieceAt(c, r);
+    if (occ) pieces = pieces.filter(p => p !== occ); // 覆盖替换
+    pieces.push({ id: makeId(), side, type, col: c, row: r,
+      state: type === "king" ? "imprisoned_invincible" : "free",
+      isClone: false, hasMoved: false, activelyUnlocked: false });
+    render();
+    return;
+  }
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const cell = xyToCell(x, y);
+  if (!cell) { selected = null; legalMap.clear(); render(); return; }
+  const [col, row] = cell;
+  const hint = document.getElementById("hint");
+
+  if (!selected) {
+    // IDLE：选择己方可动棋子
+    const p = pieceAt(col, row);
+    if (p && p.side === turn && legalMoves(p).length > 0) {
+      selected = p;
+      rebuildLegalMap();
+      hint.textContent = "已选中棋子，点击高亮格落子（绿=走，红=吃）。";
+      render();
+    } else if (p && p.side === turn) {
+      hint.textContent = "该棋子无可走格。";
+    } else {
+      hint.textContent = (turn === "white" ? "白方" : "黑方") + "回合，请点击己方棋子。";
+    }
+    return;
+  }
+
+  // SELECTED
+  const key = col + "," + row;
+  if (legalMap.has(key)) {
+    const mover = selected;
+    // 记谱上下文：移动前状态（doMove 会改变 col/row/type/state/hasMoved）
+    const ctx = {
+      fromCol: mover.col, fromRow: mover.row,
+      moverTypeBefore: mover.type,
+      wasFirstKingMove: (mover.type === "king" && !mover.isClone && !mover.hasMoved),
+      wasBerserk: mover.state === "berserk",
+    };
+    legalMap.clear(); selected = null;
+    if (!studyMode) pushHistory(); // 落子前快照，供悔棋恢复（研究态用 studyUndo 重放）
+    const res = doMove(mover, col, row);
+    render(); // 先展示落子
+    finishTurn(mover, res, ctx);
+    return;
+  }
+
+  // 切换到另一枚己方棋子
+  const p = pieceAt(col, row);
+  if (p && p.side === turn && legalMoves(p).length > 0) {
+    selected = p; rebuildLegalMap();
+    hint.textContent = "已切换选中棋子。";
+    render();
+  } else {
+    selected = null; legalMap.clear();
+    hint.textContent = "已取消选择。";
+    render();
+  }
+});
+
+function rebuildLegalMap() {
+  legalMap.clear();
+  for (const m of legalMoves(selected)) {
+    legalMap.set(m.col + "," + m.row, { capture: m.capture });
+  }
+}
+
+document.getElementById("btn-new").addEventListener("click", newGame);
+document.getElementById("btn-undo").addEventListener("click", undo);
+document.getElementById("btn-redo").addEventListener("click", redo);
+document.getElementById("preset").addEventListener("change", (e) => {
+  currentPreset = e.target.value;
+  newGame(); // 自定义同内置档位：已存阵容直接开局；尚未创建时 newGame 检测空局自动进摆子
+});
+
+/* ----- 自定义档位下拉：主题化弹层，写回隐藏 #preset 并触发其 change ----- */
+(function setupPresetDropdown() {
+  const dd = document.getElementById("preset-dd");
+  const sel = document.getElementById("preset");
+  const trigger = document.getElementById("preset-trigger");
+  const valEl = dd.querySelector(".cdd-val");
+  const opts = Array.from(dd.querySelectorAll(".cd-opt"));
+  function labelFor(v) { const o = opts.find(x => x.dataset.val === v); return o ? o.querySelector(".cd-name").textContent : ""; }
+  function syncDisplay() {
+    valEl.textContent = labelFor(sel.value);
+    opts.forEach(o => o.classList.toggle("sel", o.dataset.val === sel.value));
+  }
+  function setOpen(open) {
+    if (open && sel.disabled) return;
+    dd.classList.toggle("open", open);
+    trigger.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  trigger.addEventListener("click", (e) => { e.stopPropagation(); setOpen(!dd.classList.contains("open")); });
+  opts.forEach(o => o.addEventListener("click", () => {
+    if (o.dataset.val === sel.value) { setOpen(false); return; }
+    sel.value = o.dataset.val;
+    sel.dispatchEvent(new Event("change")); // 复用既有监听：更新 currentPreset + newGame
+    syncDisplay();
+    setOpen(false);
+  }));
+  document.addEventListener("click", (e) => { if (!dd.contains(e.target)) setOpen(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+  window.syncPresetDropdown = syncDisplay;
+  syncDisplay();
+})();
+
+/* ----- 摆子模式接线 ----- */
+document.getElementById("btn-edit-setup").addEventListener("click", enterSetup);
+document.getElementById("setup-palette").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-tool]");
+  if (chip) setSetupTool(chip.dataset.tool);
+});
+document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
+document.getElementById("btn-setup-exit").addEventListener("click", () => exitSetup(false));
+document.getElementById("btn-setup-cancel").addEventListener("click", () => exitSetup(false));
+document.getElementById("btn-setup-start").addEventListener("click", startFromSetup);
+document.getElementById("btn-rules").addEventListener("click", () => {
+  document.getElementById("rules").classList.toggle("open");
+});
+
+/* ----- 记谱 / 复盘 按钮 ----- */
+function exportRecord() {
+  if (moveLog.length === 0) {
+    document.getElementById("hint").textContent = "尚无棋谱可导出。";
+    return;
+  }
+  const data = { game: "商周大战", preset: currentPreset, moves: moveLog };
+  if (currentPreset === "custom" && Array.isArray(customLayout)) data.layout = customLayout;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "商周大战棋谱.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  document.getElementById("hint").textContent = "棋谱已导出（" + moveLog.length + " 步）。";
+}
+// 把自定义布局单项规范为数组格式 [side,type,col,row]，非法返回 null（兼容旧对象格式）
+function normLayoutItem(d) {
+  let side, type, col, row;
+  if (Array.isArray(d)) { [side, type, col, row] = d; }
+  else if (d && typeof d === "object") { side = d.side; type = d.type; col = d.col; row = d.row; }
+  else return null;
+  if (side !== "white" && side !== "black") return null;
+  if (type !== "king" && type !== "soldier") return null;
+  col = +col; row = +row;
+  if (!Number.isFinite(col) || !Number.isFinite(row)) return null;
+  return [side, type, col, row];
+}
+function importRecord(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.moves)) throw new Error("格式不符");
+      const layout = Array.isArray(data.layout)
+        ? data.layout.map(normLayoutItem).filter(Boolean)
+        : null;
+      const isCustom = !!layout || data.preset === "custom";
+      if (isCustom && !layout) {
+        document.getElementById("hint").textContent = "该自定义棋谱未含初始布局，无法还原复盘。";
+        return;
+      }
+      if (isCustom) { customLayout = layout; currentPreset = "custom"; syncCustomSub(); }
+      const preset = isCustom ? "custom" : (PRESETS[data.preset] ? data.preset : "battle");
+      const moves = data.moves.map(m => ({
+        step: m.step, side: m.side, piece: m.piece,
+        from: m.from, to: m.to,
+        capture: m.capture || null,
+        events: Array.isArray(m.events) ? m.events : [],
+        result: m.result || null,
+        notation: m.notation || notationOf(m),
+      }));
+      startReplay(moves, preset, "导入：" + f.name);
+    } catch (err) {
+      document.getElementById("hint").textContent = "棋谱文件解析失败，未能导入。";
+    }
+  };
+  reader.readAsText(f);
+  e.target.value = "";
+}
+document.getElementById("btn-export").addEventListener("click", exportRecord);
+document.getElementById("btn-import").addEventListener("click", () => document.getElementById("file-import").click());
+document.getElementById("file-import").addEventListener("change", importRecord);
+document.getElementById("btn-replay").addEventListener("click", () => {
+  if (moveLog.length === 0) return;
+  startReplay(moveLog.map(m => ({ ...m })), currentPreset, "本局");
+});
+document.getElementById("btn-first").addEventListener("click", () => replayGoto(0));
+document.getElementById("btn-prev").addEventListener("click", () => replayGoto(replayIndex - 1));
+document.getElementById("btn-next").addEventListener("click", () => replayGoto(replayIndex + 1));
+document.getElementById("btn-last").addEventListener("click", () => replayGoto(replayMoves.length));
+document.getElementById("btn-study").addEventListener("click", enterStudy);
+document.getElementById("btn-exit-replay").addEventListener("click", exitReplay);
+document.getElementById("btn-study-undo").addEventListener("click", studyUndo);
+document.getElementById("btn-exit-study").addEventListener("click", exitStudy);
+
+
+function newGame() {
+  setupMode = false;
+  initPieces();
+  turn = "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  stepCount = 0; gameOver = null;
+  sideLostClone = { white: false, black: false };
+  sideCloneUnlocked = { white: false, black: false };
+  positionCounts = new Map();
+  undoStack = []; redoStack = [];
+  moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
+  studyMode = false; studyMoves = [];
+  // 自定义空局：自动进入摆子模式
+  if (currentPreset === "custom" && pieces.length === 0) {
+    setupMode = true;
+    setupTool = "white_soldier";
+    document.getElementById("hint").textContent = "摆子模式：在面板选棋子后点棋盘放置，选橡皮删除；摆好点「校验并开下」。";
+    render();
+    renderScoresheet();
+    return;
+  }
+  document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
+  render();
+  renderScoresheet();
+}
+
+/* =========================================================
+ * 摆子模式（自定义局面编辑）
+ * ========================================================= */
+function setupPieceCounts() {
+  const c = { white_king: 0, white_soldier: 0, black_king: 0, black_soldier: 0 };
+  for (const p of pieces) c[p.side + "_" + p.type]++;
+  return c;
+}
+function updateSetupPalette() {
+  document.querySelectorAll("#setup-palette [data-tool]").forEach(el => {
+    el.classList.toggle("sel", el.dataset.tool === setupTool);
+  });
+}
+function setSetupTool(t) {
+  setupTool = t;
+  updateSetupPalette();
+  const hint = document.getElementById("hint");
+  hint.textContent = (t === "erase")
+    ? "橡皮：点击棋盘上的棋子即可删除。"
+    : "已选「" + setupToolLabel(t) + "」，点击空格放置（同格点击可覆盖）。";
+}
+function setupToolLabel(t) {
+  return { white_king: "周武王", white_soldier: "周兵", black_king: "商纣王", black_soldier: "商卒", erase: "橡皮" }[t] || t;
+}
+function enterSetup() {
+  setupSnapshot = snapshot(); // 记录进入前对局，供退出/取消原样还原
+  setupMode = true;
+  selected = null; legalMap.clear();
+  // 以当前棋盘为起点二次编辑（不清空）；记为自定义档位以便保存
+  if (currentPreset !== "custom") { currentPreset = "custom"; document.getElementById("preset").value = "custom"; syncPresetDropdown(); }
+  setupTool = "white_soldier";
+  document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；「退出摆子」放弃修改返回原对局，「校验并开下」保存并开始。";
+  render();
+  renderScoresheet();
+}
+function exitSetup(toPlay) {
+  if (!toPlay) {
+    // 退出/取消：原样还原进入摆子前的对局（不改任何存档）
+    if (setupSnapshot) { restoreSnapshot(setupSnapshot); setupSnapshot = null; }
+    setupMode = false;
+    document.getElementById("hint").textContent = "已退出摆子，返回进入前的对局。";
+    render();
+    renderScoresheet();
+    return;
+  }
+  setupSnapshot = null;
+  setupMode = false;
+  document.getElementById("hint").textContent = "自定义局面已保存并开始对局，白方先行。";
+  render();
+  renderScoresheet();
+}
+function clearSetup() {
+  pieces = [];
+  document.getElementById("hint").textContent = "已清空棋盘，请重新摆子。";
+  render();
+}
+function validateSetup() {
+  const c = setupPieceCounts();
+  if (c.white_king !== 1) return "周方须恰好 1 名武王（当前 " + c.white_king + "）。";
+  if (c.black_king !== 1) return "商方须恰好 1 名武王（当前 " + c.black_king + "）。";
+  if (c.white_soldier < 1) return "周方须至少 1 名兵。";
+  if (c.black_soldier < 1) return "商方须至少 1 名兵。";
+  recomputeKingStates();
+  // 禁锢是正常开局态（武王无敌、士兵自由行棋）；仅当「王被禁锢 且 该方无兵」才是无解死局
+  const wk = kingOf("white"), bk = kingOf("black");
+  if (wk && wk.state === "imprisoned_invincible" && c.white_soldier === 0)
+    return "周武王被禁锢且无兵可走，开局即死局。";
+  if (bk && bk.state === "imprisoned_invincible" && c.black_soldier === 0)
+    return "商纣王被禁锢且无兵可走，开局即死局。";
+  if (!hasAnyMove("white")) return "开局周方无合法行动，无法开下。";
+  return null;
+}
+function startFromSetup() {
+  const err = validateSetup();
+  if (err) { document.getElementById("hint").textContent = "无法开下：" + err; return; }
+  customLayout = pieces.map(p => [p.side, p.type, p.col, p.row]);
+  saveCustomLayout();
+  syncCustomSub();
+  // 以校验后的状态为起点开始对局
+  setupMode = false;
+  turn = "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  stepCount = 0; gameOver = null;
+  sideLostClone = { white: false, black: false };
+  sideCloneUnlocked = { white: false, black: false };
+  positionCounts = new Map(positionCounts.size ? [[positionHash(), 1]] : []);
+  undoStack = []; redoStack = [];
+  moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
+  studyMode = false; studyMoves = [];
+  recomputeKingStates();
+  document.getElementById("hint").textContent = "自定义局面已开始，白方先行。";
+  render();
+  renderScoresheet();
+}
+
+/* =========================================================
+ * 启动
+ * ========================================================= */
+customLayout = loadCustomLayout(); // 恢复本浏览器已保存的自定义阵容
+syncCustomSub();
+initPieces();
+render();
+renderScoresheet();
+</script>
+</body>
+</html>
