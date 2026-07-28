@@ -100,14 +100,51 @@
   .b-badge { color: var(--gold); background: linear-gradient(160deg, #5a5a5a, #232323 60%, #050505); border-color: #000; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.5); }
 
   .preset-label { display: block; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-bottom: 3px; }
-  #panel select {
-    width: 100%; background: linear-gradient(160deg, #3a3226, #2a241a); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer;
-    transition: border-color .2s, box-shadow .2s;
+  #panel select { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  /* 自定义档位下拉（主题化，取代原生弹层） */
+  .cdd { position: relative; flex: 0 0 auto; }
+  .cdd-trigger {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: linear-gradient(160deg, #3a3226, #2a241a); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 11px;
+    font-size: 13px; letter-spacing: .5px; cursor: pointer;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
   }
-  #panel select:hover:not(:disabled) { border-color: var(--gold-soft); }
-  #panel select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-faint); }
-  #panel select option { color: #2a1a08; background: #fff; padding: 4px 6px; }
+  .cdd-trigger:hover { border-color: var(--gold-soft); }
+  .cdd.open .cdd-trigger { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
+  .cdd-val { font-weight: 700; }
+  .cdd-arrow {
+    width: 8px; height: 8px; flex: 0 0 8px; border-right: 2px solid var(--gold); border-bottom: 2px solid var(--gold);
+    transform: rotate(45deg) translateY(-2px); transition: transform .25s ease;
+  }
+  .cdd.open .cdd-arrow { transform: rotate(-135deg) translateY(-2px); }
+  .cdd-pop {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 7px;
+    background: linear-gradient(165deg, #2c2418, #1d1710);
+    border: 1px solid var(--gold-soft); border-radius: 8px;
+    box-shadow: 0 12px 26px rgba(0,0,0,.6), inset 0 0 0 1px var(--gold-faint);
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateY(-6px) scale(.98); transform-origin: top;
+    transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  }
+  .cdd.open .cdd-pop { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); }
+  .cd-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 7px 4px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; background: rgba(255,255,255,.02);
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .cd-opt:hover { background: rgba(232,195,74,.13); border-color: var(--gold-faint); }
+  .cd-opt:active { transform: scale(.96); }
+  .cd-opt.sel { background: rgba(232,195,74,.16); border-color: var(--gold-soft); box-shadow: inset 0 0 0 1px var(--gold-faint); }
+  .cd-name { font-size: 13px; font-weight: 700; color: var(--ink); letter-spacing: 1px; }
+  .cd-opt.sel .cd-name { color: var(--gold); }
+  .cd-sub { font-size: 10px; color: var(--ink-dim); letter-spacing: .5px; }
+  .cd-opt.sel .cd-sub { color: #d8b86a; }
+  .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
 
   #panel button {
     background: linear-gradient(160deg, #3b3327, #2a241a); color: var(--ink);
@@ -218,12 +255,23 @@
     <section class="sect">
       <div class="sect-title">开 局</div>
       <label class="preset-label" for="preset">档位</label>
-      <select id="preset">
-        <option value="small">小局 (10子)</option>
-        <option value="standard">标准 (14子)</option>
-        <option value="battle" selected>大战 (18子)</option>
-        <option value="army">兵海 (22子)</option>
-      </select>
+      <div class="cdd" id="preset-dd">
+        <select id="preset" aria-hidden="true" tabindex="-1">
+          <option value="small">小局 (10子)</option>
+          <option value="standard">标准 (14子)</option>
+          <option value="battle" selected>大战 (18子)</option>
+          <option value="army">兵海 (22子)</option>
+        </select>
+        <button type="button" class="cdd-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="cdd-val"></span><span class="cdd-arrow"></span>
+        </button>
+        <div class="cdd-pop" role="listbox">
+          <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小局</span><span class="cd-sub">10 子</span></div>
+          <div class="cd-opt" data-val="standard" role="option"><span class="cd-name">标准</span><span class="cd-sub">14 子</span></div>
+          <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">18 子</span></div>
+          <div class="cd-opt" data-val="army" role="option"><span class="cd-name">兵海</span><span class="cd-sub">22 子</span></div>
+        </div>
+      </div>
     </section>
 
     <!-- 操作 -->
@@ -1219,6 +1267,7 @@ function updatePanel() {
   document.getElementById("play-controls").style.display = playOn ? "block" : "none";
   document.getElementById("replay-controls").style.display = playOn ? "none" : "block";
   document.getElementById("preset").disabled = !playOn;
+  document.getElementById("preset-dd").classList.toggle("is-disabled", !playOn);
   document.getElementById("btn-replay").disabled = (moveLog.length === 0);
   if (!playOn) {
     const navOn = !studyMode;
@@ -1315,6 +1364,36 @@ document.getElementById("preset").addEventListener("change", (e) => {
   currentPreset = e.target.value;
   newGame();
 });
+
+/* ----- 自定义档位下拉：主题化弹层，写回隐藏 #preset 并触发其 change ----- */
+(function setupPresetDropdown() {
+  const dd = document.getElementById("preset-dd");
+  const sel = document.getElementById("preset");
+  const trigger = document.getElementById("preset-trigger");
+  const valEl = dd.querySelector(".cdd-val");
+  const opts = Array.from(dd.querySelectorAll(".cd-opt"));
+  function labelFor(v) { const o = opts.find(x => x.dataset.val === v); return o ? o.querySelector(".cd-name").textContent : ""; }
+  function syncDisplay() {
+    valEl.textContent = labelFor(sel.value);
+    opts.forEach(o => o.classList.toggle("sel", o.dataset.val === sel.value));
+  }
+  function setOpen(open) {
+    if (open && sel.disabled) return;
+    dd.classList.toggle("open", open);
+    trigger.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  trigger.addEventListener("click", (e) => { e.stopPropagation(); setOpen(!dd.classList.contains("open")); });
+  opts.forEach(o => o.addEventListener("click", () => {
+    if (o.dataset.val === sel.value) { setOpen(false); return; }
+    sel.value = o.dataset.val;
+    sel.dispatchEvent(new Event("change")); // 复用既有监听：更新 currentPreset + newGame
+    syncDisplay();
+    setOpen(false);
+  }));
+  document.addEventListener("click", (e) => { if (!dd.contains(e.target)) setOpen(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+  syncDisplay();
+})();
 document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
 });
