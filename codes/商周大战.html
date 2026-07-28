@@ -394,6 +394,13 @@
 const SIZE = 19;
 const COL_LETTERS = "ABCDEFGHJKLMNOPQRST"; // 跳过 I
 const MARGIN = 32, CELL = 32;
+// 棋子绘制半径(px)与 hover 缩放：放大棋子、悬停可行动棋子时平滑放大
+const STONE_R_SMALL = 11;   // 兵/卒
+const STONE_R_BIG   = 14;   // 武王/分身
+const HOVER_GROW    = 0.12; // 悬停放大比例
+const SEL_RING_R    = 18;   // 选中描边环半径(px)
+const CAP_RING_GAP  = 4;    // 吃子光环超出目标棋子的间隙(px)
+const CAP_RING_W    = 3;    // 吃子光环线宽
 
 // 王城（内部坐标 row=0 对应棋盘第1行=底部）
 const WHITE_PALACE = { c0: 7, c1: 11, r0: 0, r1: 3 };  // 白方(底部) H-M / 1-4
@@ -466,6 +473,9 @@ let customLayout = null;       // 自定义局面 [{side,type,col,row}]，null=�
 let setupSnapshot = null;      // 进入摆子前的对局快照，供退出/取消还原
 let setupEntryPreset = null;   // 进入摆子时的档位，供「退出摆子」有改动时切回
 let setupDirty = false;        // 本次摆子是否改动过棋子（决定是否记为自定义 / 退出是否还原）
+let hoveredPiece = null;       // 鼠标悬停的可行动棋子（缩放反馈）
+let hoverRAF = 0;              // hover 缩放动画句柄
+let lastHoverCell = null;      // 上次悬停判定的格（避免 mousemove 重复算 legalMoves）
 
 let nextId = 1;
 function makeId() { return nextId++; }
@@ -510,6 +520,7 @@ function initPieces() {
     isClone: false,
     hasMoved: false,         // 仅对 king 有意义：首次移动后为 true（失去无敌、不可再禁锢）
     activelyUnlocked: false, // 主动解锁标记：禁止被动重新禁锢
+    hoverT: 0,               // hover 缩放动画进度 0..1
   }));
 }
 
@@ -871,7 +882,7 @@ function announce(term) {
 /* ----- 悔棋 / 撤销悔棋：落子前快照入 undoStack；悔棋压 redoStack；新动作清 redoStack ----- */
 function snapshot() {
   return {
-    pieces: pieces.map(p => ({ ...p })),
+    pieces: pieces.map(p => { const { hoverT, ...rest } = p; return rest; }), // 快照不含 hoverT，避免悔棋/还原后残留缩放
     turn, stepCount,
     sideLostClone: { ...sideLostClone },
     sideCloneUnlocked: { ...sideCloneUnlocked },
@@ -1188,14 +1199,22 @@ function drawHighlights() {
   const [sx, sy] = cellToXY(selected.col, selected.row);
   ctx.strokeStyle = "#ffd700";
   ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(sx, sy, CELL*0.46, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(sx, sy, SEL_RING_R, 0, Math.PI*2); ctx.stroke();
 
-  // 合法目标
+  // 合法目标：空格=绿色落点；吃子=红色光环包住目标棋子（棋子放大后仍可见）
   for (const [key, info] of legalMap) {
     const [c, r] = key.split(",").map(Number);
     const [x, y] = cellToXY(c, r);
-    ctx.fillStyle = info.capture ? "rgba(220,40,40,0.45)" : "rgba(60,200,80,0.4)";
-    ctx.beginPath(); ctx.arc(x, y, CELL*0.42, 0, Math.PI*2); ctx.fill();
+    if (info.capture) {
+      const t = pieceAt(c, r);
+      const tr = (t && (t.type === "king" || t.type === "clone") ? STONE_R_BIG : STONE_R_SMALL) + CAP_RING_GAP;
+      ctx.strokeStyle = "rgba(220,40,40,0.85)";
+      ctx.lineWidth = CAP_RING_W;
+      ctx.beginPath(); ctx.arc(x, y, tr, 0, Math.PI*2); ctx.stroke();
+    } else {
+      ctx.fillStyle = "rgba(60,200,80,0.4)";
+      ctx.beginPath(); ctx.arc(x, y, CELL*0.42, 0, Math.PI*2); ctx.fill();
+    }
   }
 }
 
@@ -1203,7 +1222,9 @@ function drawPieces() {
   for (const p of pieces) {
     const [x, y] = cellToXY(p.col, p.row);
     const isBig = p.type === "king" || p.type === "clone";
-    const r = isBig ? CELL*0.42 : CELL*0.30;
+    const interactive = !setupMode && !gameOver && !(replayMode && !studyMode);
+    const hv = interactive ? (p.hoverT || 0) : 0;   // 仅可交互态应用悬停缩放
+    const r = (isBig ? STONE_R_BIG : STONE_R_SMALL) * (1 + HOVER_GROW * hv);
     const isWhite = p.side === "white";
 
     // 暴走外辉光环
@@ -1305,10 +1326,35 @@ function drawPieces() {
     // 文字
     const label = isBig ? (isWhite ? "武" : "纣") : (isWhite ? "兵" : "卒");
     ctx.fillStyle = isWhite ? "#2a1a08" : "#eee";
-    ctx.font = (isBig ? "bold " : "") + (isBig ? 16 : 13) + "px sans-serif";
+    ctx.font = (isBig ? "bold " : "") + Math.round((isBig ? 16 : 13) * (1 + HOVER_GROW * hv)) + "px sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(label, x, y);
   }
+}
+
+/* ----- 棋子 hover 缩放反馈：仅当前可行动棋子生效，平滑缓入缓出 ----- */
+function hoverEligible(p) { return !!p && p.side === turn && legalMoves(p).length > 0; }
+function recomputeHoverAt(ix, iy) {
+  if (setupMode || gameOver || (replayMode && !studyMode)) { hoveredPiece = null; lastHoverCell = null; return; }
+  const cell = xyToCell(ix, iy);
+  const key = cell ? cell[0] + "," + cell[1] : null;
+  if (key === lastHoverCell) return; // 同一格内不重复计算 legalMoves
+  lastHoverCell = key;
+  const p = cell ? pieceAt(cell[0], cell[1]) : null;
+  hoveredPiece = hoverEligible(p) ? p : null;
+}
+function kickHover() { if (!hoverRAF) hoverRAF = requestAnimationFrame(hoverTick); }
+function hoverTick() {
+  let moving = false;
+  for (const p of pieces) {
+    const target = (p === hoveredPiece) ? 1 : 0;
+    const cur = p.hoverT || 0;
+    if (cur < target) { p.hoverT = Math.min(target, cur + 0.2); moving = true; }
+    else if (cur > target) { p.hoverT = Math.max(target, cur - 0.2); moving = true; }
+  }
+  render();
+  if (moving) hoverRAF = requestAnimationFrame(hoverTick);
+  else hoverRAF = 0;
 }
 
 function kingStateText(side) {
@@ -1424,7 +1470,7 @@ canvas.addEventListener("click", (e) => {
     markSetupDirty();
     pieces.push({ id: makeId(), side, type, col: c, row: r,
       state: type === "king" ? "imprisoned_invincible" : "free",
-      isClone: false, hasMoved: false, activelyUnlocked: false });
+      isClone: false, hasMoved: false, activelyUnlocked: false, hoverT: 0 });
     render();
     return;
   }
@@ -1467,6 +1513,7 @@ canvas.addEventListener("click", (e) => {
     const res = doMove(mover, col, row);
     render(); // 先展示落子
     finishTurn(mover, res, ctx);
+    { const _ph = hoveredPiece; recomputeHoverAt(x, y); if (hoveredPiece !== _ph) kickHover(); }
     return;
   }
 
@@ -1481,6 +1528,19 @@ canvas.addEventListener("click", (e) => {
     hint.textContent = "已取消选择。";
     render();
   }
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const ix = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const iy = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const prev = hoveredPiece;
+  recomputeHoverAt(ix, iy);
+  if (hoveredPiece !== prev) kickHover();
+});
+canvas.addEventListener("mouseleave", () => {
+  lastHoverCell = null;
+  if (hoveredPiece) { hoveredPiece = null; kickHover(); }
 });
 
 function rebuildLegalMap() {
@@ -1626,6 +1686,7 @@ document.getElementById("btn-exit-study").addEventListener("click", exitStudy);
 function newGame() {
   setupMode = false;
   initPieces();
+  hoveredPiece = null; lastHoverCell = null;
   turn = "white";
   selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
   stepCount = 0; gameOver = null;
@@ -1680,6 +1741,8 @@ function enterSetup() {
   setupSnapshot = snapshot();      // 进入前对局快照，供「退出摆子」有改动时还原
   setupEntryPreset = currentPreset; // 记住进入时的档位（退出有改动时切回）
   setupDirty = false;               // 本次尚未改动棋子
+  hoveredPiece = null; lastHoverCell = null;
+  for (const p of pieces) p.hoverT = 0; // 进入摆子清零悬停缩放，避免退出后残留
   setupMode = true;
   selected = null; legalMap.clear();
   // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义，等首次改动棋子再切（markSetupDirty）
