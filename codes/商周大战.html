@@ -158,20 +158,17 @@
   }
   .sp-chip:hover { border-color: var(--gold-soft); }
   .sp-chip.sel { border-color: var(--gold); background: linear-gradient(160deg, #5a4a1e, #3f3312); color: #ffe9a8; box-shadow: 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
-  .sp-chip.erase { grid-column: 1 / -1; }
   .sp-chip.erase.sel { background: linear-gradient(160deg, #5a241e, #3f1410); border-color: #d44848; color: #ffd0c4; box-shadow: 0 0 0 1px rgba(212,72,72,.3); }
   .sp-dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; box-shadow: inset 0 -2px 3px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.45); }
   .sp-dot.wk { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
   .sp-dot.ws { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
   .sp-dot.bk { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
   .sp-dot.bs { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
-  .setup-row { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; }
-  .setup-exit { margin-bottom: 6px; }
+  .setup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   #btn-setup-exit {
-    width: 100%; background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
+    background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
   }
   #panel #btn-setup-exit:hover:not(:disabled) { background: linear-gradient(160deg, #6e2c24, #4d1812); border-color: #ff6a5a; }
-  #btn-setup-cancel { color: #d8b86a; }
 
   #panel button {
     background: linear-gradient(160deg, #3b3327, #2a241a); color: var(--ink);
@@ -324,15 +321,12 @@
           <div class="sp-chip" data-tool="white_soldier"><span class="sp-dot ws"></span>周兵</div>
           <div class="sp-chip" data-tool="black_king"><span class="sp-dot bk"></span>商纣王</div>
           <div class="sp-chip" data-tool="black_soldier"><span class="sp-dot bs"></span>商卒</div>
+        </div>
+        <div class="setup-actions">
           <div class="sp-chip erase" data-tool="erase">橡皮擦</div>
-        </div>
-        <div class="setup-exit">
-          <button id="btn-setup-exit">退出摆子 ✕</button>
-        </div>
-        <div class="setup-row">
           <button id="btn-setup-clear">清空</button>
-          <button id="btn-setup-cancel">取消</button>
-          <button id="btn-setup-start" class="btn-primary">校验并开下</button>
+          <button id="btn-setup-exit">退出摆子 ✕</button>
+          <button id="btn-setup-start" class="btn-primary">校验并保存</button>
         </div>
       </div>
       <div id="replay-controls">
@@ -470,6 +464,8 @@ let setupMode = false;         // 摆子模式：编辑自定义局面，禁用�
 let setupTool = "white_soldier"; // 当前摆子工具：white_king|white_soldier|black_king|black_soldier|erase
 let customLayout = null;       // 自定义局面 [{side,type,col,row}]，null=尚无
 let setupSnapshot = null;      // 进入摆子前的对局快照，供退出/取消还原
+let setupEntryPreset = null;   // 进入摆子时的档位，供「退出摆子」有改动时切回
+let setupDirty = false;        // 本次摆子是否改动过棋子（决定是否记为自定义 / 退出是否还原）
 
 let nextId = 1;
 function makeId() { return nextId++; }
@@ -1415,7 +1411,7 @@ canvas.addEventListener("click", (e) => {
     const hint = document.getElementById("hint");
     if (setupTool === "erase") {
       const t = pieceAt(c, r);
-      if (t) { pieces = pieces.filter(p => p !== t); render(); }
+      if (t) { markSetupDirty(); pieces = pieces.filter(p => p !== t); render(); }
       return;
     }
     const [side, type] = setupTool.split("_");
@@ -1425,6 +1421,7 @@ canvas.addEventListener("click", (e) => {
     }
     const occ = pieceAt(c, r);
     if (occ) pieces = pieces.filter(p => p !== occ); // 覆盖替换
+    markSetupDirty();
     pieces.push({ id: makeId(), side, type, col: c, row: r,
       state: type === "king" ? "imprisoned_invincible" : "free",
       isClone: false, hasMoved: false, activelyUnlocked: false });
@@ -1534,13 +1531,12 @@ document.getElementById("preset").addEventListener("change", (e) => {
 
 /* ----- 摆子模式接线 ----- */
 document.getElementById("btn-edit-setup").addEventListener("click", enterSetup);
-document.getElementById("setup-palette").addEventListener("click", (e) => {
+document.getElementById("setup-controls").addEventListener("click", (e) => {
   const chip = e.target.closest("[data-tool]");
   if (chip) setSetupTool(chip.dataset.tool);
 });
 document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
 document.getElementById("btn-setup-exit").addEventListener("click", () => exitSetup(false));
-document.getElementById("btn-setup-cancel").addEventListener("click", () => exitSetup(false));
 document.getElementById("btn-setup-start").addEventListener("click", startFromSetup);
 document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
@@ -1641,9 +1637,12 @@ function newGame() {
   studyMode = false; studyMoves = [];
   // 自定义空局：自动进入摆子模式
   if (currentPreset === "custom" && pieces.length === 0) {
+    setupSnapshot = snapshot();      // 空局快照，供「退出摆子」有改动时还原为空
+    setupEntryPreset = "custom";
+    setupDirty = false;
     setupMode = true;
     setupTool = "white_soldier";
-    document.getElementById("hint").textContent = "摆子模式：在面板选棋子后点棋盘放置，选橡皮删除；摆好点「校验并开下」。";
+    document.getElementById("hint").textContent = "摆子模式：在面板选棋子后点棋盘放置，选橡皮删除；摆好点「校验并保存」。";
     render();
     renderScoresheet();
     return;
@@ -1662,7 +1661,7 @@ function setupPieceCounts() {
   return c;
 }
 function updateSetupPalette() {
-  document.querySelectorAll("#setup-palette [data-tool]").forEach(el => {
+  document.querySelectorAll("#setup-controls [data-tool]").forEach(el => {
     el.classList.toggle("sel", el.dataset.tool === setupTool);
   });
 }
@@ -1678,22 +1677,43 @@ function setupToolLabel(t) {
   return { white_king: "周武王", white_soldier: "周兵", black_king: "商纣王", black_soldier: "商卒", erase: "橡皮" }[t] || t;
 }
 function enterSetup() {
-  setupSnapshot = snapshot(); // 记录进入前对局，供退出/取消原样还原
+  setupSnapshot = snapshot();      // 进入前对局快照，供「退出摆子」有改动时还原
+  setupEntryPreset = currentPreset; // 记住进入时的档位（退出有改动时切回）
+  setupDirty = false;               // 本次尚未改动棋子
   setupMode = true;
   selected = null; legalMap.clear();
-  // 以当前棋盘为起点二次编辑（不清空）；记为自定义档位以便保存
-  if (currentPreset !== "custom") { currentPreset = "custom"; document.getElementById("preset").value = "custom"; syncPresetDropdown(); }
+  // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义，等首次改动棋子再切（markSetupDirty）
   setupTool = "white_soldier";
-  document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；「退出摆子」放弃修改返回原对局，「校验并开下」保存并开始。";
+  document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；改动后档位记为「自定义」。「退出摆子」无改动则直接退出、有改动则撤销并返回原档；「校验并保存」保存自定义并开始。";
   render();
   renderScoresheet();
 }
+// 摆子期间首次改动棋子：把档位记为「自定义」（同步下拉）并置脏标记
+function markSetupDirty() {
+  if (setupDirty) return;
+  setupDirty = true;
+  if (currentPreset !== "custom") {
+    currentPreset = "custom";
+    document.getElementById("preset").value = "custom";
+    syncPresetDropdown();
+  }
+}
 function exitSetup(toPlay) {
   if (!toPlay) {
-    // 退出/取消：原样还原进入摆子前的对局（不改任何存档）
-    if (setupSnapshot) { restoreSnapshot(setupSnapshot); setupSnapshot = null; }
+    const wasDirty = setupDirty;
+    if (wasDirty) {
+      // 有改动：还原进入前的棋子，并把档位切回进入时的档
+      if (setupSnapshot) restoreSnapshot(setupSnapshot);
+      currentPreset = setupEntryPreset;
+      document.getElementById("preset").value = currentPreset;
+      syncPresetDropdown();
+    }
+    // 无改动：棋子/档位本未变，仅退出摆子界面
+    setupSnapshot = null;
     setupMode = false;
-    document.getElementById("hint").textContent = "已退出摆子，返回进入前的对局。";
+    document.getElementById("hint").textContent = wasDirty
+      ? "已退出摆子，撤销本次修改并返回「" + ((PRESETS[setupEntryPreset] || {}).name || "自定义") + "」。"
+      : "已退出摆子。";
     render();
     renderScoresheet();
     return;
@@ -1705,6 +1725,7 @@ function exitSetup(toPlay) {
   renderScoresheet();
 }
 function clearSetup() {
+  if (pieces.length) markSetupDirty();
   pieces = [];
   document.getElementById("hint").textContent = "已清空棋盘，请重新摆子。";
   render();
@@ -1727,11 +1748,19 @@ function validateSetup() {
 }
 function startFromSetup() {
   const err = validateSetup();
-  if (err) { document.getElementById("hint").textContent = "无法开下：" + err; return; }
-  customLayout = pieces.map(p => [p.side, p.type, p.col, p.row]);
-  saveCustomLayout();
-  syncCustomSub();
+  if (err) { document.getElementById("hint").textContent = "校验未通过：" + err; return; }
+  // 仅当本次有改动、或本就来自自定义档时，才记为自定义；否则保留原档、不覆盖已存自定义
+  const becameCustom = setupDirty || setupEntryPreset === "custom";
+  if (becameCustom) {
+    customLayout = pieces.map(p => [p.side, p.type, p.col, p.row]);
+    saveCustomLayout();
+    syncCustomSub();
+    currentPreset = "custom";
+    document.getElementById("preset").value = "custom";
+    syncPresetDropdown();
+  }
   // 以校验后的状态为起点开始对局
+  setupSnapshot = null;
   setupMode = false;
   turn = "white";
   selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
@@ -1743,7 +1772,9 @@ function startFromSetup() {
   moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
   studyMode = false; studyMoves = [];
   recomputeKingStates();
-  document.getElementById("hint").textContent = "自定义局面已开始，白方先行。";
+  document.getElementById("hint").textContent = becameCustom
+    ? "自定义局面已保存并开始，白方先行。"
+    : "已校验并开始（未改动，保留「" + ((PRESETS[setupEntryPreset] || {}).name || "自定义") + "」档）。";
   render();
   renderScoresheet();
 }
