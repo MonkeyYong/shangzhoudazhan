@@ -151,6 +151,7 @@
     background: rgba(0,0,0,.22); padding: 5px;
   }
   #movelist .mv { padding: 3px 8px; border-radius: 4px; white-space: pre; border-left: 2px solid transparent; transition: background .15s; }
+  #movelist .mv[data-i] { cursor: pointer; }
   #movelist .mv:nth-child(even) { background: rgba(255,255,255,.025); }
   #movelist .mv:hover { background: rgba(232,195,74,.08); }
   #movelist .mv.cur { background: rgba(232,195,74,.14); border-left-color: var(--gold); color: #ffe9a8; }
@@ -795,14 +796,21 @@ function renderScoresheet() {
     list = moveLog; idx = moveLog.length;
   }
   const el = document.getElementById("movelist");
+  const jumpable = replayMode && !studyMode; // 仅复盘浏览态可点击跳转
   let html = "";
   for (let i = 0; i < list.length; i++) {
     const m = list[i];
     let cls = (i + 1 === idx) ? " cur" : "";
     if (studyMode && i >= stBase) cls += " st";
-    html += '<div class="mv' + cls + '">' + (m.notation || notationOf(m)) + "</div>";
+    html += '<div class="mv' + cls + '"' + (jumpable ? ' data-i="' + i + '"' : "") + '>'
+          + (m.notation || notationOf(m)) + "</div>";
   }
   el.innerHTML = html || '<div style="color:#888">尚无棋谱。</div>';
+  if (jumpable) {
+    el.querySelectorAll(".mv[data-i]").forEach(node => {
+      node.addEventListener("click", () => replayGoto(parseInt(node.dataset.i, 10) + 1));
+    });
+  }
   const cur = el.querySelector(".mv.cur");
   if (cur) cur.scrollIntoView({ block: "nearest" });
 }
