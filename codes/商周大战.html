@@ -23,60 +23,155 @@
     box-shadow: 0 6px 24px rgba(0,0,0,.6), inset 0 0 0 2px rgba(232,195,74,0.45);
   }
   canvas { display: block; cursor: pointer; }
+  :root{
+    --gold: #e8c34a;
+    --gold-soft: rgba(232,195,74,.45);
+    --gold-faint: rgba(232,195,74,.16);
+    --line: #4a3a24;
+    --ink: #efe6d0;
+    --ink-dim: #b3a486;
+  }
   #panel {
     width: 260px; flex: 0 0 260px;
     height: 660px; /* 与 #board-wrap 等高（canvas 640 + 内边距 10*2） */
-    background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
-    padding: 14px; font-size: 14px; line-height: 1.6;
+    background: linear-gradient(165deg, #2a231a, #1c1710);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.55), inset 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.05);
+    padding: 12px; font-size: 14px; line-height: 1.45;
     overflow: hidden;
     display: flex; flex-direction: column;
+    color: var(--ink);
   }
   #panel h1 {
-    font-size: 22px; margin: 0 0 10px; text-align: center; letter-spacing: 6px;
-    color: #e8c34a; text-shadow: 0 0 8px rgba(232,195,74,0.4);
-    border-bottom: 1px solid #5a4218; padding-bottom: 8px;
+    font-size: 20px; line-height: 1.2; margin: 0; text-align: center; letter-spacing: 7px;
+    color: var(--gold); font-weight: 800; flex: 0 0 auto;
+    text-shadow: 0 0 10px rgba(232,195,74,.35), 0 1px 0 rgba(0,0,0,.6);
   }
-  #panel .sep { border: 0; border-top: 1px solid #444; margin: 10px 0; }
-  #panel .row { display: flex; justify-content: space-between; margin: 3px 0; }
-  #panel .turn { font-weight: bold; }
-  #panel .turn.white { color: #f3f3e0; }
-  #panel .turn.black { color: #bbb; }
-  #panel button {
-    background: #3a3a3a; color: #eee; border: 1px solid #666; border-radius: 4px;
-    padding: 6px 12px; cursor: pointer; font-size: 13px; margin-right: 6px;
+  .plaque-rule { height: 4px; margin: 5px 0 9px; flex: 0 0 auto; border-top: 2px solid var(--gold-soft); border-bottom: 1px solid var(--gold-faint); }
+
+  .sect { margin: 0 0 7px; flex: 0 0 auto; }
+  .sect-grow { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+  .sect-title {
+    font-size: 11px; line-height: 1.2; letter-spacing: 3px; color: var(--ink-dim);
+    display: flex; align-items: center; gap: 8px; margin: 0 0 4px; flex: 0 0 auto;
   }
-  #panel button:hover { background: #4a4a4a; }
-  #panel button:disabled { opacity: .4; cursor: default; }
+  .sect-title::before { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line)); }
+  .sect-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+
+  .row { display: flex; justify-content: space-between; align-items: center; margin: 2px 0; }
+
+  .turn-banner {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 10px; border-radius: 8px; margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--gold-faint), rgba(232,195,74,.03));
+    border: 1px solid var(--line);
+  }
+  #turn { font-size: 15px; font-weight: 800; letter-spacing: 2px; }
+  #turn.white { color: #f5efdd; }
+  #turn.black { color: #c9c9c9; }
+  .stone-dot {
+    order: -1; width: 18px; height: 18px; border-radius: 50%; flex: 0 0 18px;
+    box-shadow: 0 2px 5px rgba(0,0,0,.5), inset 0 -2px 3px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.5);
+  }
+  #turn.white + .stone-dot { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
+  #turn.black + .stone-dot { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+
+  .king-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px; }
+  .king-card {
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px;
+    background: linear-gradient(160deg, rgba(255,255,255,.03), rgba(0,0,0,.14));
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .king-card .badge { align-self: flex-start; }
+  .kc-state { font-size: 14px; line-height: 1.2; font-weight: 800; letter-spacing: 1px; }
+  .kc-clone { font-size: 11px; line-height: 1.2; color: var(--ink-dim); }
+  .kc-clone b { color: var(--ink); font-size: 12px; font-weight: 700; }
+  .st-imprisoned { color: #7ab8ff; }
+  .st-berserk { color: #ff7a4a; text-shadow: 0 0 8px rgba(255,90,40,.4); }
+  .st-free { color: #8fd98f; }
+  .st-invincible { color: #f0d27a; }
+  .st-dead { color: #777; }
+
+  .steps-row { font-size: 13px; color: var(--ink-dim); }
+  .steps-row #steps { color: var(--ink); font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+
+  .badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; letter-spacing: 1px; font-weight: 700; border: 1px solid transparent; display: inline-block; }
+  .w-badge { color: #2a1a08; background: linear-gradient(160deg, #fff, #e9dcbc 65%, #c4b184); border-color: #b8a676; box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(0,0,0,.4); }
+  .b-badge { color: var(--gold); background: linear-gradient(160deg, #5a5a5a, #232323 60%, #050505); border-color: #000; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.5); }
+
+  .preset-label { display: block; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-bottom: 3px; }
   #panel select {
-    background: #3a3a3a; color: #eee; border: 1px solid #666; border-radius: 4px;
-    padding: 5px 8px; font-size: 13px; cursor: pointer; margin-left: 4px;
+    width: 100%; background: linear-gradient(160deg, #3a3226, #2a241a); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer;
+    transition: border-color .2s, box-shadow .2s;
   }
-  #hint { min-height: 48px; color: #9cd; font-size: 13px; margin-top: 8px; }
+  #panel select:hover:not(:disabled) { border-color: var(--gold-soft); }
+  #panel select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-faint); }
+  #panel select option { color: #2a1a08; background: #fff; padding: 4px 6px; }
+
+  #panel button {
+    background: linear-gradient(160deg, #3b3327, #2a241a); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 6px; cursor: pointer; font-size: 12px; letter-spacing: .5px;
+    transition: transform .12s, border-color .18s, box-shadow .18s, background .18s;
+    box-shadow: 0 2px 4px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  #panel button:hover:not(:disabled) {
+    border-color: var(--gold-soft); background: linear-gradient(160deg, #473d2c, #332b1e);
+    box-shadow: 0 3px 8px rgba(0,0,0,.4), 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08);
+    transform: translateY(-1px);
+  }
+  #panel button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+  #panel button:disabled { opacity: .35; cursor: default; }
+  .btn-primary { background: linear-gradient(160deg, #5a4a1e, #3f3312); color: #ffe9a8; border-color: #8a6d2a; }
+  #panel .btn-primary:hover:not(:disabled) { background: linear-gradient(160deg, #6b5824, #4a3c16); border-color: var(--gold); }
+  .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #study-nav .btn-grid { grid-template-columns: 1fr 1fr; }
+  .btn-grid .span2 { grid-column: 1 / -1; }
+
+  .replay-progress-row { margin-top: 5px; font-size: 12px; color: var(--ink-dim); }
+  .replay-progress-row #replay-progress { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  #hint {
+    color: #cfe0f0; font-size: 13px; line-height: 1.5;
+    margin: 0 0 6px; padding: 6px 10px; flex: 0 0 auto;
+    border-left: 3px solid var(--gold); border-radius: 0 6px 6px 0;
+    background: linear-gradient(90deg, rgba(232,195,74,.07), transparent);
+  }
+  #movelist {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    font-size: 12px; line-height: 1.5;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: rgba(0,0,0,.22); padding: 5px;
+  }
+  #movelist .mv { padding: 3px 8px; border-radius: 4px; white-space: pre; border-left: 2px solid transparent; transition: background .15s; }
+  #movelist .mv:nth-child(even) { background: rgba(255,255,255,.025); }
+  #movelist .mv:hover { background: rgba(232,195,74,.08); }
+  #movelist .mv.cur { background: rgba(232,195,74,.14); border-left-color: var(--gold); color: #ffe9a8; }
+  #movelist .mv.st { color: #9ec8e8; }
+  #movelist .mv.st.cur { color: #ffe9a8; }
+  #movelist::-webkit-scrollbar { width: 8px; }
+  #movelist::-webkit-scrollbar-track { background: transparent; }
+  #movelist::-webkit-scrollbar-thumb { background: #4a3a24; border-radius: 4px; }
+  #movelist::-webkit-scrollbar-thumb:hover { background: #6a5432; }
+
   #rules {
     display: none;
     width: 320px; height: 660px; /* 与右面板同高，独立于其右侧 */
-    background: #1f1f1f; border: 1px solid #444; border-radius: 6px;
+    background: linear-gradient(165deg, #2a231a, #1c1710);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.55), inset 0 0 0 1px var(--gold-faint);
     padding: 14px; font-size: 13px; line-height: 1.65; color: #ccc;
     overflow-y: auto;
   }
   #rules.open { display: block; }
-  #rules h3 { font-size: 14px; margin: 10px 0 4px; color: #fc6; }
+  #rules h3 { font-size: 14px; margin: 10px 0 4px; color: var(--gold); }
   #rules p, #rules li { margin: 4px 0; }
-  .badge { font-size: 12px; padding: 1px 6px; border-radius: 8px; background: #333; }
-  .w-badge { color: #fff; background: #777; }
-  .b-badge { color: #000; background: #ccc; }
-  #panel label { display: block; }
-  #movelist {
-    flex: 1 1 auto; min-height: 0; overflow-y: auto;
-    margin-top: 8px; font-size: 12px; line-height: 1.5;
-  }
-  #movelist .mv { padding: 2px 4px; border-radius: 3px; white-space: pre; }
-  #movelist .mv.cur { background: #3a3a2a; color: #fc6; }
+  #rules::-webkit-scrollbar { width: 8px; }
+  #rules::-webkit-scrollbar-thumb { background: #4a3a24; border-radius: 4px; }
+
   #replay-controls { display: none; }
-  #replay-controls .row { margin: 4px 0; }
   #study-nav { display: none; }
-  #movelist .mv.st { color: #9cd; }
-  #movelist .mv.st.cur { color: #fc6; }
   #file-import { display: none; }
 </style>
 </head>
@@ -86,51 +181,85 @@
   <div id="board-wrap">
     <canvas id="board" width="640" height="640"></canvas>
   </div>
-  <div id="panel">  <!-- 右面板内容结束 -->
+  <div id="panel">
     <h1>商周大战</h1>
-    <hr class="sep">
-    <div class="row"><span>当前回合</span><span id="turn" class="turn white">白方</span></div>
-    <div class="row"><span><span class="badge w-badge">白武王</span></span><span id="w-king">禁锢</span></div>
-    <div class="row"><span><span class="badge b-badge">黑武王</span></span><span id="b-king">禁锢</span></div>
-    <div class="row"><span>分身</span><span><span class="w-badge badge" id="w-clone">白0</span> / <span class="b-badge badge" id="b-clone">黑0</span></span></div>
-    <div class="row"><span>步数</span><span id="steps">0</span></div>
-    <hr class="sep">
-    <label>开局<select id="preset">
-      <option value="small">小局 (10子)</option>
-      <option value="standard">标准 (14子)</option>
-      <option value="battle" selected>大战 (18子)</option>
-      <option value="army">兵海 (22子)</option>
-    </select></label>
-    <hr class="sep">
-    <div id="play-controls">
-      <button id="btn-new">新局</button>
-      <button id="btn-undo">悔棋</button>
-      <button id="btn-redo">撤销悔棋</button>
-      <button id="btn-rules">规则 ▾</button>
-      <hr class="sep">
-      <button id="btn-export">导出棋谱</button>
-      <button id="btn-import">导入棋谱</button>
-      <button id="btn-replay">复盘本局</button>
-    </div>
-    <div id="replay-controls">
-      <div id="replay-nav">
-        <button id="btn-first">首步</button>
-        <button id="btn-prev">前一步</button>
-        <button id="btn-next">后一步</button>
-        <button id="btn-last">末步</button>
-        <button id="btn-study">研究</button>
-        <button id="btn-exit-replay">退出</button>
+    <div class="plaque-rule"></div>
+
+    <!-- 局势 -->
+    <section class="sect">
+      <div class="sect-title">局 势</div>
+      <div class="turn-banner">
+        <span id="turn" class="turn white">白方</span>
+        <span class="stone-dot"></span>
       </div>
-      <div id="study-nav">
-        <button id="btn-study-undo">悔棋</button>
-        <button id="btn-exit-study">退出研究</button>
+      <div class="king-cards">
+        <div class="king-card">
+          <span class="badge w-badge">周武王</span>
+          <span class="kc-state st-imprisoned" id="w-king">禁锢</span>
+          <span class="kc-clone">分身 <b id="w-clone">0</b></span>
+        </div>
+        <div class="king-card">
+          <span class="badge b-badge">商纣王</span>
+          <span class="kc-state st-imprisoned" id="b-king">禁锢</span>
+          <span class="kc-clone">分身 <b id="b-clone">0</b></span>
+        </div>
       </div>
-      <hr class="sep">
-      <div class="row"><span>复盘进度</span><span id="replay-progress">0/0</span></div>
-    </div>
-    <hr class="sep">
-    <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
-    <div id="movelist"></div>
+      <div class="row steps-row"><span>回合步数</span><span id="steps">0</span></div>
+    </section>
+
+    <!-- 开局 -->
+    <section class="sect">
+      <div class="sect-title">开 局</div>
+      <label class="preset-label" for="preset">档位</label>
+      <select id="preset">
+        <option value="small">小局 (10子)</option>
+        <option value="standard">标准 (14子)</option>
+        <option value="battle" selected>大战 (18子)</option>
+        <option value="army">兵海 (22子)</option>
+      </select>
+    </section>
+
+    <!-- 操作 -->
+    <section class="sect">
+      <div class="sect-title">操 作</div>
+      <div id="play-controls">
+        <div class="btn-grid">
+          <button id="btn-new" class="btn-primary span2">新局</button>
+          <button id="btn-undo">悔棋</button>
+          <button id="btn-redo">撤销悔棋</button>
+          <button id="btn-replay">复盘本局</button>
+          <button id="btn-export">导出棋谱</button>
+          <button id="btn-import">导入棋谱</button>
+          <button id="btn-rules">规则 ▾</button>
+        </div>
+      </div>
+      <div id="replay-controls">
+        <div id="replay-nav">
+          <div class="btn-grid">
+            <button id="btn-first">首步</button>
+            <button id="btn-prev">前一步</button>
+            <button id="btn-next">后一步</button>
+            <button id="btn-last">末步</button>
+            <button id="btn-study" class="btn-primary">研究</button>
+            <button id="btn-exit-replay">退出</button>
+          </div>
+        </div>
+        <div id="study-nav">
+          <div class="btn-grid">
+            <button id="btn-study-undo">悔棋</button>
+            <button id="btn-exit-study">退出研究</button>
+          </div>
+        </div>
+        <div class="row replay-progress-row"><span>复盘进度</span><span id="replay-progress">0/0</span></div>
+      </div>
+    </section>
+
+    <!-- 棋谱 -->
+    <section class="sect sect-grow">
+      <div class="sect-title">棋 谱</div>
+      <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
+      <div id="movelist"></div>
+    </section>
   </div>
   <input type="file" id="file-import" accept=".json,application/json">
   <!-- 规则面板：独立列于右面板右侧，默认隐藏，由 #btn-rules 切换 -->
@@ -1044,16 +1173,29 @@ function kingStateText(side) {
   if (k.hasMoved) return "解锁";
   return "解锁·无敌";
 }
+// 状态对应的着色 class（见 CSS .st-*）
+function kingStateClass(side) {
+  const k = kingOf(side);
+  if (!k) return "st-dead";
+  if (k.state === "imprisoned_invincible") return "st-imprisoned";
+  if (k.state === "berserk") return "st-berserk";
+  if (k.hasMoved) return "st-free";
+  return "st-invincible";
+}
 
 function updatePanel() {
   document.getElementById("turn").textContent = gameOver
     ? (gameOver.winner === "draw" ? "平局" : (gameOver.winner === "white" ? "白方胜" : "黑方胜"))
     : (turn === "white" ? "白方" : "黑方");
   document.getElementById("turn").className = "turn " + (turn === "white" ? "white" : "black");
-  document.getElementById("w-king").textContent = kingStateText("white");
-  document.getElementById("b-king").textContent = kingStateText("black");
-  document.getElementById("w-clone").textContent = "白" + cloneCount("white");
-  document.getElementById("b-clone").textContent = "黑" + cloneCount("black");
+  const wk = document.getElementById("w-king");
+  wk.textContent = kingStateText("white");
+  wk.className = "kc-state " + kingStateClass("white");
+  const bk = document.getElementById("b-king");
+  bk.textContent = kingStateText("black");
+  bk.className = "kc-state " + kingStateClass("black");
+  document.getElementById("w-clone").textContent = cloneCount("white");
+  document.getElementById("b-clone").textContent = cloneCount("black");
   document.getElementById("steps").textContent = stepCount;
   document.getElementById("btn-undo").disabled = undoStack.length === 0;
   document.getElementById("btn-redo").disabled = redoStack.length === 0;
