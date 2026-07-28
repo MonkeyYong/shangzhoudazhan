@@ -1227,14 +1227,19 @@ function drawPieces() {
     const r = (isBig ? STONE_R_BIG : STONE_R_SMALL) * (1 + HOVER_GROW * hv);
     const isWhite = p.side === "white";
 
-    // 暴走外辉光环
+    // 暴走光环：外层柔光 + 内层锐利亮边，使暴走状态更醒目
     if (p.state === "berserk") {
       ctx.save();
-      ctx.shadowColor = isWhite ? "#fff2a0" : "#ff5a2a";
-      ctx.shadowBlur = 20;
-      ctx.strokeStyle = isWhite ? "rgba(255,240,180,0.55)" : "rgba(255,90,40,0.6)";
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI*2); ctx.stroke();
+      ctx.shadowColor = isWhite ? "#ffe680" : "#ff7a3a";
+      ctx.shadowBlur = 22;
+      ctx.strokeStyle = isWhite ? "rgba(255,224,120,0.95)" : "rgba(255,120,58,0.95)";
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.strokeStyle = isWhite ? "rgba(255,245,180,1)" : "rgba(255,170,110,1)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI*2); ctx.stroke();
       ctx.restore();
     }
 
