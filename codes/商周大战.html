@@ -122,7 +122,7 @@
   .cdd.open .cdd-arrow { transform: rotate(-135deg) translateY(-2px); }
   .cdd-pop {
     position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 7px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 7px;
     background: linear-gradient(165deg, #2c2418, #1d1710);
     border: 1px solid var(--gold-soft); border-radius: 8px;
     box-shadow: 0 12px 26px rgba(0,0,0,.6), inset 0 0 0 1px var(--gold-faint);
@@ -145,6 +145,33 @@
   .cd-sub { font-size: 10px; color: var(--ink-dim); letter-spacing: .5px; }
   .cd-opt.sel .cd-sub { color: #d8b86a; }
   .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
+
+  /* 摆子模式面板 */
+  #setup-controls { display: none; }
+  .setup-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 7px; }
+  .sp-chip {
+    display: flex; align-items: center; gap: 6px; justify-content: center;
+    padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+    font-size: 12px; letter-spacing: .5px; color: var(--ink);
+    background: linear-gradient(160deg, #3b3327, #2a241a);
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .sp-chip:hover { border-color: var(--gold-soft); }
+  .sp-chip.sel { border-color: var(--gold); background: linear-gradient(160deg, #5a4a1e, #3f3312); color: #ffe9a8; box-shadow: 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
+  .sp-chip.erase { grid-column: 1 / -1; }
+  .sp-chip.erase.sel { background: linear-gradient(160deg, #5a241e, #3f1410); border-color: #d44848; color: #ffd0c4; box-shadow: 0 0 0 1px rgba(212,72,72,.3); }
+  .sp-dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; box-shadow: inset 0 -2px 3px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.45); }
+  .sp-dot.wk { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
+  .sp-dot.ws { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
+  .sp-dot.bk { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+  .sp-dot.bs { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+  .setup-row { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; }
+  .setup-exit { margin-bottom: 6px; }
+  #btn-setup-exit {
+    width: 100%; background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
+  }
+  #panel #btn-setup-exit:hover:not(:disabled) { background: linear-gradient(160deg, #6e2c24, #4d1812); border-color: #ff6a5a; }
+  #btn-setup-cancel { color: #d8b86a; }
 
   #panel button {
     background: linear-gradient(160deg, #3b3327, #2a241a); color: var(--ink);
@@ -261,6 +288,7 @@
           <option value="standard">标准 (14子)</option>
           <option value="battle" selected>大战 (18子)</option>
           <option value="army">兵海 (22子)</option>
+          <option value="custom">自定义</option>
         </select>
         <button type="button" class="cdd-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
           <span class="cdd-val"></span><span class="cdd-arrow"></span>
@@ -270,6 +298,7 @@
           <div class="cd-opt" data-val="standard" role="option"><span class="cd-name">标准</span><span class="cd-sub">14 子</span></div>
           <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">18 子</span></div>
           <div class="cd-opt" data-val="army" role="option"><span class="cd-name">兵海</span><span class="cd-sub">22 子</span></div>
+          <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
         </div>
       </div>
     </section>
@@ -285,7 +314,25 @@
           <button id="btn-replay">复盘本局</button>
           <button id="btn-export">导出棋谱</button>
           <button id="btn-import">导入棋谱</button>
+          <button id="btn-edit-setup" class="span2">摆子 ✎</button>
           <button id="btn-rules">规则<span class="caret">▶</span></button>
+        </div>
+      </div>
+      <div id="setup-controls">
+        <div class="setup-palette" id="setup-palette">
+          <div class="sp-chip" data-tool="white_king"><span class="sp-dot wk"></span>周武王</div>
+          <div class="sp-chip" data-tool="white_soldier"><span class="sp-dot ws"></span>周兵</div>
+          <div class="sp-chip" data-tool="black_king"><span class="sp-dot bk"></span>商纣王</div>
+          <div class="sp-chip" data-tool="black_soldier"><span class="sp-dot bs"></span>商卒</div>
+          <div class="sp-chip erase" data-tool="erase">橡皮擦</div>
+        </div>
+        <div class="setup-exit">
+          <button id="btn-setup-exit">退出摆子 ✕</button>
+        </div>
+        <div class="setup-row">
+          <button id="btn-setup-clear">清空</button>
+          <button id="btn-setup-cancel">取消</button>
+          <button id="btn-setup-start" class="btn-primary">校验并开下</button>
         </div>
       </div>
       <div id="replay-controls">
@@ -413,15 +460,43 @@ let replayMoves = [];          // 复盘所用的棋谱
 let replayIndex = 0;           // 复盘已应用的步数
 let studyMode = false;         // 研究模式：在复盘当前局面上继续行棋
 let studyMoves = [];           // 研究着法（附在复盘基线之后）
+let setupMode = false;         // 摆子模式：编辑自定义局面，禁用行棋
+let setupTool = "white_soldier"; // 当前摆子工具：white_king|white_soldier|black_king|black_soldier|erase
+let customLayout = null;       // 自定义局面 [{side,type,col,row}]，null=尚无
+let setupSnapshot = null;      // 进入摆子前的对局快照，供退出/取消还原
 
 let nextId = 1;
 function makeId() { return nextId++; }
 
-// 初始局面（按当前档位装配：基础 8 子 + 机动兵）
+// 自定义局面 localStorage 存取
+const CUSTOM_LAYOUT_KEY = "szdz_custom_layout_v1";
+function loadCustomLayout() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_LAYOUT_KEY);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return arr.filter(d => Array.isArray(d) && d.length === 4
+      && (d[0] === "white" || d[0] === "black") && (d[1] === "king" || d[1] === "soldier"));
+  } catch (e) { return null; }
+}
+function saveCustomLayout() {
+  try {
+    const data = pieces.map(p => [p.side, p.type, p.col, p.row]);
+    localStorage.setItem(CUSTOM_LAYOUT_KEY, JSON.stringify(data));
+  } catch (e) { /* 隐私模式等写失败时静默忽略 */ }
+}
+
+// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
 function initPieces() {
   nextId = 1;
-  const preset = PRESETS[currentPreset];
-  const data = BASE_PIECES.concat(buildMobile(preset.tiers));
+  let data;
+  if (currentPreset === "custom") {
+    data = customLayout || [];
+  } else {
+    const preset = PRESETS[currentPreset];
+    data = BASE_PIECES.concat(buildMobile(preset.tiers));
+  }
   pieces = data.map(d => ({
     id: makeId(), side: d[0], type: d[1],
     col: d[2], row: d[3],
@@ -1099,6 +1174,7 @@ function drawPalaceDecor(P, side) {
 }
 
 function drawHighlights() {
+  if (setupMode) return;
   if (!selected) return;
   // 选中棋子描边
   const [sx, sy] = cellToXY(selected.col, selected.row);
@@ -1246,6 +1322,29 @@ function kingStateClass(side) {
 }
 
 function updatePanel() {
+  // 摆子态：切换面板、显示摆子计数、禁用行棋/复盘控件
+  if (setupMode) {
+    const cnt = setupPieceCounts();
+    document.getElementById("w-king").textContent = cnt.white_king;
+    document.getElementById("w-king").className = "kc-state st-invincible";
+    document.getElementById("b-king").textContent = cnt.black_king;
+    document.getElementById("b-king").className = "kc-state st-berserk";
+    document.getElementById("w-clone").textContent = cnt.white_soldier;
+    document.getElementById("b-clone").textContent = cnt.black_soldier;
+    document.getElementById("steps").textContent = "—";
+    document.getElementById("turn").textContent = "摆子中";
+    document.getElementById("turn").className = "turn white";
+    document.getElementById("play-controls").style.display = "none";
+    document.getElementById("replay-controls").style.display = "none";
+    document.getElementById("setup-controls").style.display = "block";
+    document.getElementById("preset").disabled = true;
+    document.getElementById("preset-dd").classList.add("is-disabled");
+    document.getElementById("btn-undo").disabled = true;
+    document.getElementById("btn-redo").disabled = true;
+    updateSetupPalette();
+    return;
+  }
+  document.getElementById("setup-controls").style.display = "none";
   document.getElementById("turn").textContent = gameOver
     ? (gameOver.winner === "draw" ? "平局" : (gameOver.winner === "white" ? "白方胜" : "黑方胜"))
     : (turn === "white" ? "白方" : "黑方");
@@ -1295,6 +1394,31 @@ canvas.addEventListener("click", (e) => {
   if (replayMode && !studyMode) return;
   if (gameOver) return;
   const rect = canvas.getBoundingClientRect();
+  const x0 = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y0 = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const cell0 = xyToCell(x0, y0);
+  if (setupMode) {
+    if (!cell0) return;
+    const [c, r] = cell0;
+    const hint = document.getElementById("hint");
+    if (setupTool === "erase") {
+      const t = pieceAt(c, r);
+      if (t) { pieces = pieces.filter(p => p !== t); render(); }
+      return;
+    }
+    const [side, type] = setupTool.split("_");
+    if (type === "king" && pieces.some(p => p.side === side && p.type === "king")) {
+      hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先橡皮删除再放置。";
+      return;
+    }
+    const occ = pieceAt(c, r);
+    if (occ) pieces = pieces.filter(p => p !== occ); // 覆盖替换
+    pieces.push({ id: makeId(), side, type, col: c, row: r,
+      state: type === "king" ? "imprisoned_invincible" : "free",
+      isClone: false, hasMoved: false, activelyUnlocked: false });
+    render();
+    return;
+  }
   const x = (e.clientX - rect.left) * (canvas.width / rect.width);
   const y = (e.clientY - rect.top) * (canvas.height / rect.height);
   const cell = xyToCell(x, y);
@@ -1362,7 +1486,12 @@ document.getElementById("btn-undo").addEventListener("click", undo);
 document.getElementById("btn-redo").addEventListener("click", redo);
 document.getElementById("preset").addEventListener("change", (e) => {
   currentPreset = e.target.value;
-  newGame();
+  if (currentPreset === "custom") {
+    // 自定义：保留当前棋盘，进入摆子模式二次编辑（不清空）
+    enterSetup();
+  } else {
+    newGame();
+  }
 });
 
 /* ----- 自定义档位下拉：主题化弹层，写回隐藏 #preset 并触发其 change ----- */
@@ -1394,6 +1523,17 @@ document.getElementById("preset").addEventListener("change", (e) => {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
   syncDisplay();
 })();
+
+/* ----- 摆子模式接线 ----- */
+document.getElementById("btn-edit-setup").addEventListener("click", enterSetup);
+document.getElementById("setup-palette").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-tool]");
+  if (chip) setSetupTool(chip.dataset.tool);
+});
+document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
+document.getElementById("btn-setup-exit").addEventListener("click", () => exitSetup(false));
+document.getElementById("btn-setup-cancel").addEventListener("click", () => exitSetup(false));
+document.getElementById("btn-setup-start").addEventListener("click", startFromSetup);
 document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
 });
@@ -1458,6 +1598,7 @@ document.getElementById("btn-exit-study").addEventListener("click", exitStudy);
 
 
 function newGame() {
+  setupMode = false;
   initPieces();
   turn = "white";
   selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
@@ -1468,7 +1609,110 @@ function newGame() {
   undoStack = []; redoStack = [];
   moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
   studyMode = false; studyMoves = [];
+  // 自定义空局：自动进入摆子模式
+  if (currentPreset === "custom" && pieces.length === 0) {
+    setupMode = true;
+    setupTool = "white_soldier";
+    document.getElementById("hint").textContent = "摆子模式：在面板选棋子后点棋盘放置，选橡皮删除；摆好点「校验并开下」。";
+    render();
+    renderScoresheet();
+    return;
+  }
   document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
+  render();
+  renderScoresheet();
+}
+
+/* =========================================================
+ * 摆子模式（自定义局面编辑）
+ * ========================================================= */
+function setupPieceCounts() {
+  const c = { white_king: 0, white_soldier: 0, black_king: 0, black_soldier: 0 };
+  for (const p of pieces) c[p.side + "_" + p.type]++;
+  return c;
+}
+function updateSetupPalette() {
+  document.querySelectorAll("#setup-palette [data-tool]").forEach(el => {
+    el.classList.toggle("sel", el.dataset.tool === setupTool);
+  });
+}
+function setSetupTool(t) {
+  setupTool = t;
+  updateSetupPalette();
+  const hint = document.getElementById("hint");
+  hint.textContent = (t === "erase")
+    ? "橡皮：点击棋盘上的棋子即可删除。"
+    : "已选「" + setupToolLabel(t) + "」，点击空格放置（同格点击可覆盖）。";
+}
+function setupToolLabel(t) {
+  return { white_king: "周武王", white_soldier: "周兵", black_king: "商纣王", black_soldier: "商卒", erase: "橡皮" }[t] || t;
+}
+function enterSetup() {
+  setupSnapshot = snapshot(); // 记录进入前对局，供退出/取消原样还原
+  setupMode = true;
+  selected = null; legalMap.clear();
+  // 以当前棋盘为起点二次编辑（不清空）；记为自定义档位以便保存
+  if (currentPreset !== "custom") { currentPreset = "custom"; document.getElementById("preset").value = "custom"; }
+  setupTool = "white_soldier";
+  document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；「退出摆子」放弃修改返回原对局，「校验并开下」保存并开始。";
+  render();
+  renderScoresheet();
+}
+function exitSetup(toPlay) {
+  if (!toPlay) {
+    // 退出/取消：原样还原进入摆子前的对局（不改任何存档）
+    if (setupSnapshot) { restoreSnapshot(setupSnapshot); setupSnapshot = null; }
+    setupMode = false;
+    document.getElementById("hint").textContent = "已退出摆子，返回进入前的对局。";
+    render();
+    renderScoresheet();
+    return;
+  }
+  setupSnapshot = null;
+  setupMode = false;
+  document.getElementById("hint").textContent = "自定义局面已保存并开始对局，白方先行。";
+  render();
+  renderScoresheet();
+}
+function clearSetup() {
+  pieces = [];
+  document.getElementById("hint").textContent = "已清空棋盘，请重新摆子。";
+  render();
+}
+function validateSetup() {
+  const c = setupPieceCounts();
+  if (c.white_king !== 1) return "周方须恰好 1 名武王（当前 " + c.white_king + "）。";
+  if (c.black_king !== 1) return "商方须恰好 1 名武王（当前 " + c.black_king + "）。";
+  if (c.white_soldier < 1) return "周方须至少 1 名兵。";
+  if (c.black_soldier < 1) return "商方须至少 1 名兵。";
+  recomputeKingStates();
+  // 禁锢是正常开局态（武王无敌、士兵自由行棋）；仅当「王被禁锢 且 该方无兵」才是无解死局
+  const wk = kingOf("white"), bk = kingOf("black");
+  if (wk && wk.state === "imprisoned_invincible" && c.white_soldier === 0)
+    return "周武王被禁锢且无兵可走，开局即死局。";
+  if (bk && bk.state === "imprisoned_invincible" && c.black_soldier === 0)
+    return "商纣王被禁锢且无兵可走，开局即死局。";
+  if (!hasAnyMove("white")) return "开局周方无合法行动，无法开下。";
+  return null;
+}
+function startFromSetup() {
+  const err = validateSetup();
+  if (err) { document.getElementById("hint").textContent = "无法开下：" + err; return; }
+  customLayout = pieces.map(p => ({ side: p.side, type: p.type, col: p.col, row: p.row }));
+  saveCustomLayout();
+  // 以校验后的状态为起点开始对局
+  setupMode = false;
+  turn = "white";
+  selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
+  stepCount = 0; gameOver = null;
+  sideLostClone = { white: false, black: false };
+  sideCloneUnlocked = { white: false, black: false };
+  positionCounts = new Map(positionCounts.size ? [[positionHash(), 1]] : []);
+  undoStack = []; redoStack = [];
+  moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
+  studyMode = false; studyMoves = [];
+  recomputeKingStates();
+  document.getElementById("hint").textContent = "自定义局面已开始，白方先行。";
   render();
   renderScoresheet();
 }
