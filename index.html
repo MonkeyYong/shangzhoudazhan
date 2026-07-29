@@ -105,7 +105,10 @@
   .w-badge { color: #2a1a08; background: linear-gradient(160deg, #fff, #e9dcbc 65%, #c4b184); border-color: #b8a676; box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(0,0,0,.4); }
   .b-badge { color: var(--gold); background: linear-gradient(160deg, #5a5a5a, #232323 60%, #050505); border-color: #000; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 1px 2px rgba(0,0,0,.5); }
 
-  .preset-label { display: block; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-bottom: 3px; }
+  /* 开局三列紧凑布局：档位/对手/难度同行 */
+  .cfg-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .cfg-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .cfg-cap { font-size: 10px; color: var(--ink-dim); letter-spacing: 2px; text-align: center; }
   .skin-row { display: flex; gap: 8px; }
   .skin-swatch {
     position: relative; flex: 1; height: 30px; padding: 0; border-radius: 6px; cursor: pointer;
@@ -166,7 +169,14 @@
   .cd-sub { font-size: 10px; color: var(--ink-dim); letter-spacing: .5px; }
   .cd-opt.sel .cd-sub { color: #d8b86a; }
   .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
-  .cdd-pop.cdd-pop-3col { grid-template-columns: repeat(3, 1fr); }
+
+  /* 紧凑下拉（开局三列）：触发器收窄；弹层单列纵排、固定最小宽，
+     默认左对齐向右展开，右列（难度）向左展开避免越出面板被裁剪 */
+  .cdd-slim .cdd-trigger { padding: 5px 6px; font-size: 12px; gap: 4px; }
+  .cdd-slim .cdd-val { letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cdd-slim .cdd-pop { left: 0; right: auto; grid-template-columns: 1fr; min-width: 100px; }
+  .cdd-slim .cd-opt { padding: 5px 4px; }
+  #level-dd.cdd-slim .cdd-pop { left: auto; right: 0; }
 
   /* 摆子模式面板 */
   #setup-controls { display: none; }
@@ -300,54 +310,62 @@
     <!-- 开局 -->
     <section class="sect">
       <div class="sect-title">开 局</div>
-      <label class="preset-label" for="preset">档位</label>
-      <div class="cdd" id="preset-dd">
-        <select id="preset" aria-hidden="true" tabindex="-1">
-          <option value="small">小局 (14子)</option>
-          <option value="battle" selected>大战 (22子)</option>
-          <option value="final">决战 (34子)</option>
-          <option value="custom">自定义</option>
-        </select>
-        <button type="button" class="cdd-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
-          <span class="cdd-val"></span><span class="cdd-arrow"></span>
-        </button>
-        <div class="cdd-pop" role="listbox">
-          <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小局</span><span class="cd-sub">14 子</span></div>
-          <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">22 子</span></div>
-          <div class="cd-opt" data-val="final" role="option"><span class="cd-name">决战</span><span class="cd-sub">34 子</span></div>
-          <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
+      <div class="cfg-row">
+        <div class="cfg-cell">
+          <label class="cfg-cap" for="preset">档位</label>
+          <div class="cdd cdd-slim" id="preset-dd">
+            <select id="preset" aria-hidden="true" tabindex="-1">
+              <option value="small">小局 (14子)</option>
+              <option value="battle" selected>大战 (22子)</option>
+              <option value="final">决战 (34子)</option>
+              <option value="custom">自定义</option>
+            </select>
+            <button type="button" class="cdd-trigger" id="preset-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="cdd-val"></span><span class="cdd-arrow"></span>
+            </button>
+            <div class="cdd-pop" role="listbox">
+              <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小局</span><span class="cd-sub">14 子</span></div>
+              <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">22 子</span></div>
+              <div class="cd-opt" data-val="final" role="option"><span class="cd-name">决战</span><span class="cd-sub">34 子</span></div>
+              <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
+            </div>
+          </div>
         </div>
-      </div>
-      <label class="preset-label" for="opponent">对手</label>
-      <div class="cdd" id="opponent-dd">
-        <select id="opponent" aria-hidden="true" tabindex="-1">
-          <option value="human" selected>双人对弈</option>
-          <option value="ai-black">AI 执黑</option>
-          <option value="ai-white">AI 执白</option>
-        </select>
-        <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
-          <span class="cdd-val"></span><span class="cdd-arrow"></span>
-        </button>
-        <div class="cdd-pop cdd-pop-3col" role="listbox">
-          <div class="cd-opt" data-val="human" role="option"><span class="cd-name">双人</span><span class="cd-sub">热座</span></div>
-          <div class="cd-opt" data-val="ai-black" role="option"><span class="cd-name">AI 黑</span><span class="cd-sub">人先手</span></div>
-          <div class="cd-opt" data-val="ai-white" role="option"><span class="cd-name">AI 白</span><span class="cd-sub">AI 先手</span></div>
+        <div class="cfg-cell">
+          <label class="cfg-cap" for="opponent">对手</label>
+          <div class="cdd cdd-slim" id="opponent-dd">
+            <select id="opponent" aria-hidden="true" tabindex="-1">
+              <option value="human" selected>双人对弈</option>
+              <option value="ai-black">AI 执黑</option>
+              <option value="ai-white">AI 执白</option>
+            </select>
+            <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="cdd-val"></span><span class="cdd-arrow"></span>
+            </button>
+            <div class="cdd-pop" role="listbox">
+              <div class="cd-opt" data-val="human" role="option"><span class="cd-name">双人</span><span class="cd-sub">热座</span></div>
+              <div class="cd-opt" data-val="ai-black" role="option"><span class="cd-name">AI 黑</span><span class="cd-sub">人先手</span></div>
+              <div class="cd-opt" data-val="ai-white" role="option"><span class="cd-name">AI 白</span><span class="cd-sub">AI 先手</span></div>
+            </div>
+          </div>
         </div>
-      </div>
-      <label class="preset-label" for="level">难度</label>
-      <div class="cdd" id="level-dd">
-        <select id="level" aria-hidden="true" tabindex="-1">
-          <option value="rookie">菜鸟</option>
-          <option value="advanced" selected>高手</option>
-          <option value="master">大师</option>
-        </select>
-        <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
-          <span class="cdd-val"></span><span class="cdd-arrow"></span>
-        </button>
-        <div class="cdd-pop cdd-pop-3col" role="listbox">
-          <div class="cd-opt" data-val="rookie" role="option"><span class="cd-name">菜鸟</span><span class="cd-sub">休闲</span></div>
-          <div class="cd-opt" data-val="advanced" role="option"><span class="cd-name">高手</span><span class="cd-sub">稳健</span></div>
-          <div class="cd-opt" data-val="master" role="option"><span class="cd-name">大师</span><span class="cd-sub">深算</span></div>
+        <div class="cfg-cell">
+          <label class="cfg-cap" for="level">难度</label>
+          <div class="cdd cdd-slim" id="level-dd">
+            <select id="level" aria-hidden="true" tabindex="-1">
+              <option value="rookie">菜鸟</option>
+              <option value="advanced" selected>高手</option>
+              <option value="master">大师</option>
+            </select>
+            <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="cdd-val"></span><span class="cdd-arrow"></span>
+            </button>
+            <div class="cdd-pop" role="listbox">
+              <div class="cd-opt" data-val="rookie" role="option"><span class="cd-name">菜鸟</span><span class="cd-sub">休闲</span></div>
+              <div class="cd-opt" data-val="advanced" role="option"><span class="cd-name">高手</span><span class="cd-sub">稳健</span></div>
+              <div class="cd-opt" data-val="master" role="option"><span class="cd-name">大师</span><span class="cd-sub">深算</span></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -2524,6 +2542,7 @@ document.getElementById("preset").addEventListener("change", (e) => {
 });
 
 /* ----- 通用主题化下拉：隐藏 select 持状态、主题化弹层；选项点击写回 select 并派发 change 复用其监听 ----- */
+const _DD = []; // 主题化下拉注册表：互斥（打开一个即收起其余）
 function makeDropdown(ddId) {
   const dd = document.getElementById(ddId);
   const sel = dd.querySelector("select");
@@ -2540,7 +2559,14 @@ function makeDropdown(ddId) {
     dd.classList.toggle("open", open);
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
   }
-  trigger.addEventListener("click", (e) => { e.stopPropagation(); setOpen(!dd.classList.contains("open")); });
+  _DD.push({ dd, setOpen });
+  function closeOthers() { for (const d of _DD) if (d.dd !== dd) d.setOpen(false); } // 互斥收起
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const willOpen = !dd.classList.contains("open");
+    if (willOpen) closeOthers(); // 打开前先收起其余下拉，避免弹层重叠
+    setOpen(willOpen);
+  });
   opts.forEach(o => o.addEventListener("click", () => {
     if (o.dataset.val === sel.value) { setOpen(false); return; }
     sel.value = o.dataset.val;
