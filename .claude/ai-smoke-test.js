@@ -40,6 +40,7 @@ const sandbox = {
   localStorage: { getItem: () => null, setItem() {} },
   requestAnimationFrame: () => 0,
   cancelAnimationFrame() {},
+  addEventListener() {}, // window=sandbox：游戏顶层 window.addEventListener("resize",…) 需要此桩
   confirm: () => { throw new Error("confirm() 不应在 AI 管线被调用"); },
   alert() {},
   setTimeout, clearTimeout, console,

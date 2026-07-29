@@ -620,6 +620,102 @@ function paintStar(ox, W, H) {
   g = ox.createRadialGradient(W*0.5, H*0.5, H*0.34, W*0.5, H*0.5, H*0.82);
   g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(2,4,12,0.6)"); ox.fillStyle = g; ox.fillRect(0, 0, W, H);
 }
+// 青绿山水：离屏绘绢本纸底 + 多层石青/石绿写意山 + 云气雾带（程序化、写意非 1:1 临摹）
+// 构图对齐截图：上半留素纸为"天"，中景一座主峰+右侧高峰，底部左右前景压角，层间以云气隔开
+function paintShanShui(ox, W, H) {
+  let s = 20260729;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  const rgba = (c, a) => "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
+
+  // 绢本纸底：上偏亮、下偏暖，为上半"天空/素纸"留白
+  const paper = ox.createLinearGradient(0, 0, 0, H);
+  paper.addColorStop(0, "#f7f0dc"); paper.addColorStop(0.42, "#f2e9d0"); paper.addColorStop(1, "#e9dfc2");
+  ox.fillStyle = paper; ox.fillRect(0, 0, W, H);
+
+  // 绢本老化斑（与素笺同源，集中上半素纸区，营造古绢感）
+  ox.save(); ox.filter = "blur(" + (W * 0.02) + "px)";
+  for (const b of [[0.2,0.16,"206,182,138",0.06],[0.78,0.24,"198,172,126",0.05],[0.4,0.34,"190,166,120",0.04]]) {
+    const rg = ox.createRadialGradient(b[0]*W, b[1]*H, 4, b[0]*W, b[1]*H, W*0.16);
+    rg.addColorStop(0, "rgba(" + b[2] + "," + b[3] + ")"); rg.addColorStop(1, "rgba(" + b[2] + ",0)");
+    ox.fillStyle = rg; ox.fillRect(0, 0, W, H);
+  }
+  ox.restore();
+
+  // 一条山脊：若干尖峰({x,h,w} 比例)叠加，峰间落回基线成谷，读作"山"非横向波纹
+  const ridge = (baseFrac, color, alpha, blurFrac, peaks, jag) => {
+    const step = Math.max(2, W / 130);
+    const yAt = (x) => {
+      const u = x / W;
+      let pk = 0;
+      for (const p of peaks) { const d = (u - p.x) / p.w; pk = Math.max(pk, p.h * Math.exp(-0.5 * d * d)); }
+      const drift = 0.012 * Math.sin(u * 3.1 + jag) + 0.006 * Math.sin(u * 9.7 + jag * 1.3);
+      const rock = 0.004 * Math.sin(u * 58 + jag * 2.1);
+      return H * baseFrac - H * pk - H * drift - H * rock;
+    };
+    ox.save();
+    if (blurFrac > 0) ox.filter = "blur(" + (W * blurFrac) + "px";
+    ox.beginPath(); ox.moveTo(0, H);
+    for (let x = 0; x <= W; x += step) ox.lineTo(x, yAt(x));
+    ox.lineTo(W, H); ox.closePath();
+    const g = ox.createLinearGradient(0, H * (baseFrac - 0.22), 0, H);
+    g.addColorStop(0, rgba(color, alpha));
+    g.addColorStop(0.40, rgba(color, alpha * 0.72));
+    g.addColorStop(1, rgba(color, alpha * 0.22));
+    ox.fillStyle = g; ox.fill();
+    ox.beginPath();
+    for (let x = 0; x <= W; x += step) { const y = yAt(x); if (x === 0) ox.moveTo(x, y); else ox.lineTo(x, y); }
+    ox.strokeStyle = rgba([color[0]*0.7, color[1]*0.7, color[2]*0.72], alpha * 0.5); ox.lineWidth = W * 0.004; ox.lineCap = "round"; ox.stroke();
+    ox.restore();
+  };
+
+  // 云气：横向云带 + 扁椭圆云团水平拉丝，堆在谷地成云海
+  const mist = (yFrac, a, hFrac) => {
+    ox.save(); ox.filter = "blur(" + (W * 0.016) + "px";
+    const g = ox.createLinearGradient(0, H * (yFrac - hFrac), 0, H * (yFrac + hFrac));
+    g.addColorStop(0, rgba([247,241,222], 0));
+    g.addColorStop(0.5, rgba([247,241,222], a));
+    g.addColorStop(1, rgba([247,241,222], 0));
+    ox.fillStyle = g; ox.fillRect(0, H * (yFrac - hFrac), W, H * hFrac * 2);
+    for (let i = 0; i < 5; i++) {
+      const cx = (0.08 + rnd() * 0.84) * W, cy = H * (yFrac + (rnd() - 0.5) * hFrac * 0.8);
+      ox.save(); ox.translate(cx, cy); ox.scale(1, 0.34);
+      const rr = W * (0.10 + rnd() * 0.13);
+      const rg = ox.createRadialGradient(0, 0, 2, 0, 0, rr);
+      rg.addColorStop(0, rgba([250,245,230], a * 0.85)); rg.addColorStop(1, rgba([250,245,230], 0));
+      ox.fillStyle = rg; ox.beginPath(); ox.arc(0, 0, rr, 0, Math.PI*2); ox.fill();
+      ox.restore();
+    }
+    ox.restore();
+  };
+
+  // 由远及近叠山：尖峰+深谷+层间云海（中主峰+右高峰，底部左右丘+中部云谷）
+  ridge(0.52, [150,168,168], 0.16, 0.012, [{x:0.30,h:0.06,w:0.16},{x:0.62,h:0.05,w:0.18},{x:0.86,h:0.05,w:0.14}], 1.1);
+  mist(0.56, 0.34, 0.028);
+  ridge(0.66, [118,150,134], 0.30, 0.009, [{x:0.50,h:0.20,w:0.07},{x:0.82,h:0.16,w:0.08},{x:0.20,h:0.10,w:0.09},{x:0.66,h:0.08,w:0.06}], 2.4);
+  ridge(0.72, [92,128,134], 0.34, 0.008, [{x:0.62,h:0.14,w:0.08},{x:0.34,h:0.10,w:0.09},{x:0.92,h:0.10,w:0.07},{x:0.10,h:0.08,w:0.08}], 3.7);
+  mist(0.75, 0.44, 0.034);
+  ridge(0.90, [86,120,104], 0.42, 0.006, [{x:0.06,h:0.16,w:0.10},{x:0.22,h:0.10,w:0.09}], 5.2);
+  ridge(0.90, [64,100,112], 0.46, 0.006, [{x:0.94,h:0.16,w:0.10},{x:0.80,h:0.10,w:0.09}], 6.6);
+
+  // 山阴皴擦：主峰阴影侧几道竖向柔笔，暗示斧劈皴
+  ox.save(); ox.filter = "blur(" + (W * 0.005) + "px"; ox.lineCap = "round";
+  const cun = [[0.47,0.50],[0.53,0.52],[0.80,0.58],[0.85,0.60],[0.33,0.64],[0.62,0.66],[0.07,0.80],[0.93,0.80]];
+  for (const c of cun) {
+    const x = c[0] * W, y0 = H * c[1], len = H * (0.05 + rnd() * 0.05);
+    ox.strokeStyle = rgba([44,72,78], 0.10 + rnd() * 0.06); ox.lineWidth = W * (0.0025 + rnd() * 0.0025);
+    ox.beginPath(); ox.moveTo(x, y0); ox.lineTo(x + (rnd() - 0.5) * W * 0.01, y0 + len); ox.stroke();
+  }
+  ox.restore();
+
+  // 谷地与底边云气（中部云谷 + 底边雾）
+  mist(0.90, 0.42, 0.040);
+  mist(0.985, 0.40, 0.030);
+
+  // 暖色收边暗角（与素笺一致，统一年代感）
+  const vg = ox.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.85);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(96,76,46,0.07)");
+  ox.fillStyle = vg; ox.fillRect(0, 0, W, H);
+}
 const SKINS = {
   warm: {
     name: "经典暖木",
@@ -647,6 +743,23 @@ const SKINS = {
     accent: { white: NEON_CYAN, black: NEON_PINK },
     css: { "--gold":"#5fd0ff","--gold-soft":"rgba(95,208,255,.45)","--gold-faint":"rgba(95,208,255,.16)","--ink":"#d8ecff","--ink-dim":"#8fb6d8","--line":"#1c3550","--bg-page":"#05070f","--wrap-1":"#0c1830","--wrap-2":"#060c1a","--wrap-ring":"rgba(110,200,255,0.4)","--panel-1":"#0a1426","--panel-2":"#060d1a","--surface-1":"#122440","--surface-2":"#0c1a30","--surface-1h":"#183358","--surface-2h":"#102544","--pop-1":"#0a1426","--pop-2":"#060d1a","--primary-1":"#14406a","--primary-2":"#0d2c4c","--primary-1h":"#1a5288","--primary-2h":"#123a62" }
   }
+};
+// 青绿山水皮肤：复用素笺的宫城/棋子/网格配置，仅换底为程序化山水；宫城以 multiply 渗纸
+SKINS.shanshui = {
+  name: "青绿山水",
+  board: { bg0:"#f1e7cd", bg1:"#6f9a8e", grid:SKINS.qinglv.board.grid, star:SKINS.qinglv.board.star, coord:SKINS.qinglv.board.coord, paint: paintShanShui },
+  palace: Object.assign({}, SKINS.qinglv.palace, { a:0.42 }),
+  accent: SKINS.qinglv.accent,
+  css: {
+    "--gold":"#d8b15a","--gold-soft":"rgba(216,177,90,.45)","--gold-faint":"rgba(216,177,90,.16)",
+    "--ink":"#e9e3d0","--ink-dim":"#9fb2a2","--line":"#2a3a31",
+    "--bg-page":"#0f1a16",
+    "--wrap-1":"#2f4a44","--wrap-2":"#1c302b","--wrap-ring":"rgba(214,196,140,.5)",
+    "--panel-1":"#15201b","--panel-2":"#0d1612",
+    "--surface-1":"#1f2c26","--surface-2":"#16201b","--surface-1h":"#28382f","--surface-2h":"#1d2a23",
+    "--pop-1":"#15201b","--pop-2":"#0d1612",
+    "--primary-1":"#2c5247","--primary-2":"#1d3a31","--primary-1h":"#356153","--primary-2h":"#24463b"
+  },
 };
 let currentSkin = "warm";
 const SKIN_KEY = "szdz_skin_v1";
