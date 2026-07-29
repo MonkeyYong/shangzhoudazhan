@@ -1222,7 +1222,13 @@ function renderScoresheet() {
     });
   }
   const cur = el.querySelector(".mv.cur");
-  if (cur) cur.scrollIntoView({ block: "nearest" });
+  if (cur) {
+    // 只滚棋谱列表自身：scrollIntoView 会连带滚动文档，移动端列表在棋盘下方的面板里，
+    // 会导致落子后视口自动跳到下方面板。用 rect 差值复刻 block:"nearest" 语义
+    const er = el.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+    if (cr.top < er.top) el.scrollTop += cr.top - er.top;
+    else if (cr.bottom > er.bottom) el.scrollTop += cr.bottom - er.bottom;
+  }
 }
 
 /* ----- 复盘 / 研究模式：从初始局面按记录重放 ----- */
