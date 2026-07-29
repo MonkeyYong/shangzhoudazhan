@@ -166,6 +166,7 @@
   .cd-sub { font-size: 10px; color: var(--ink-dim); letter-spacing: .5px; }
   .cd-opt.sel .cd-sub { color: #d8b86a; }
   .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
+  .cdd-pop.cdd-pop-3col { grid-template-columns: repeat(3, 1fr); }
 
   /* 摆子模式面板 */
   #setup-controls { display: none; }
@@ -317,6 +318,38 @@
           <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
         </div>
       </div>
+      <label class="preset-label" for="opponent">对手</label>
+      <div class="cdd" id="opponent-dd">
+        <select id="opponent" aria-hidden="true" tabindex="-1">
+          <option value="human" selected>双人对弈</option>
+          <option value="ai-black">AI 执黑</option>
+          <option value="ai-white">AI 执白</option>
+        </select>
+        <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="cdd-val"></span><span class="cdd-arrow"></span>
+        </button>
+        <div class="cdd-pop cdd-pop-3col" role="listbox">
+          <div class="cd-opt" data-val="human" role="option"><span class="cd-name">双人</span><span class="cd-sub">热座</span></div>
+          <div class="cd-opt" data-val="ai-black" role="option"><span class="cd-name">AI 黑</span><span class="cd-sub">人先手</span></div>
+          <div class="cd-opt" data-val="ai-white" role="option"><span class="cd-name">AI 白</span><span class="cd-sub">AI 先手</span></div>
+        </div>
+      </div>
+      <label class="preset-label" for="level">难度</label>
+      <div class="cdd" id="level-dd">
+        <select id="level" aria-hidden="true" tabindex="-1">
+          <option value="rookie">菜鸟</option>
+          <option value="advanced" selected>高手</option>
+          <option value="master">大师</option>
+        </select>
+        <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="cdd-val"></span><span class="cdd-arrow"></span>
+        </button>
+        <div class="cdd-pop cdd-pop-3col" role="listbox">
+          <div class="cd-opt" data-val="rookie" role="option"><span class="cd-name">菜鸟</span><span class="cd-sub">休闲</span></div>
+          <div class="cd-opt" data-val="advanced" role="option"><span class="cd-name">高手</span><span class="cd-sub">稳健</span></div>
+          <div class="cd-opt" data-val="master" role="option"><span class="cd-name">大师</span><span class="cd-sub">深算</span></div>
+        </div>
+      </div>
     </section>
 
     <!-- 外观 / 皮肤 -->
@@ -404,6 +437,9 @@
     <p>同一局面出现 3 次判平局。</p>
     <h3>悔棋</h3>
     <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
+    <h3>AI 对战</h3>
+    <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「难度」分菜鸟（休闲）、高手（稳健）、大师（深算）三档，双人模式下禁用，切换即时生效。</p>
+    <p>AI 模式下悔棋一次连撤两手（AI 着 + 人类着）；若 AI 尚未应着，则只撤回人类上一步。撤销悔棋对称恢复。</p>
     <h3>开局档位</h3>
     <p>小局 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
     <h3>记谱与复盘</h3>
@@ -661,6 +697,19 @@ let setupDirty = false;        // 本次摆子是否改动过棋子（决定是�
 let hoveredPiece = null;       // 鼠标悬停的可行动棋子（缩放反馈）
 let hoverRAF = 0;              // hover 缩放动画句柄
 let lastHoverCell = null;      // 上次悬停判定的格（避免 mousemove 重复算 legalMoves）
+
+/* ----- AI 对战状态 ----- */
+let aiSide = null;        // null=双人对弈；"white"|"black"=AI 执该方
+let aiLevel = "advanced"; // rookie|advanced|master，难度档位
+let aiToken = 0;          // 调度令牌：newGame/undo/redo/复盘/摆子 入口自增，使已排队的 AI 思考作废
+let aiBusy = false;       // AI 思考/落子中（防重入、禁人类交互）
+// 难度参数：depth=最大搜索深度；timeLimitMs=迭代加深软限（超时回退至最近完整层）；
+// topN=菜鸟在最优 topN 着中随机。所有档位叶节点均接静态搜索（吃子链精算）。
+const AI_LEVELS = {
+  rookie:   { depth: 1, topN: 4, label: "rookie" },
+  advanced: { depth: 4, timeLimitMs: 2500, label: "advanced" },
+  master:   { depth: 5, timeLimitMs: 4500, label: "master" },
+};
 
 let nextId = 1;
 function makeId() { return nextId++; }
@@ -1055,6 +1104,7 @@ function finishTurn(piece, res, ctx) {
     return;
   }
   render(); renderScoresheet();
+  aiMaybeSchedule(); // 人类落子结算完 → 轮到 AI 则调度 AI 回合
 }
 
 function announce(term) {
@@ -1093,19 +1143,23 @@ function pushHistory() {
 }
 function undo() {
   if (undoStack.length === 0) return;
+  aiToken++; // 作废已排队的 AI 思考
   redoStack.push(snapshot());
   restoreSnapshot(undoStack.pop());
   document.getElementById("hint").textContent = "已悔棋，撤回上一步行棋。";
   render();
   renderScoresheet();
+  aiMaybeSchedule(); // 悔棋后若轮到 AI（如撤回了人类上一步），重新调度
 }
 function redo() {
   if (redoStack.length === 0) return;
+  aiToken++; // 作废已排队的 AI 思考
   undoStack.push(snapshot());
   restoreSnapshot(redoStack.pop());
   document.getElementById("hint").textContent = "已撤销悔棋，恢复上一步行棋。";
   render();
   renderScoresheet();
+  aiMaybeSchedule(); // 重做后若轮到 AI，重新调度
 }
 
 /* ----- 棋谱渲染 ----- */
@@ -1184,6 +1238,7 @@ function applyReplayToIndex(n) {
   selected = null; legalMap.clear(); cloneOfferCells.clear(); cloneCandidates = [];
 }
 function startReplay(moves, preset, label) {
+  aiToken++; // 作废已排队的 AI 思考
   replayMode = true;
   studyMode = false; studyMoves = [];
   replayMoves = moves;
@@ -1239,6 +1294,619 @@ function studyUndo() {
     : "已撤回上一步研究着法。";
   render();
   renderScoresheet();
+}
+
+/* =========================================================
+ * AI 引擎
+ * 独立模拟器 sim + negamax(α-β) 搜索 + 局面评估，全程不触碰全局状态。
+ * sim* 规则函数逐一翻版自「规则层 / 行动执行」（各函数注释互指原函数）。
+ * 硬约束：修改规则时必须同步改对应 sim* 函数（见 docs/AI对战设计文档.md）。
+ * ========================================================= */
+const AI_M = 1000000;                    // 终局分值基数（远大于评估值域）
+const AI_TIMEOUT = { aiTimeout: true };  // 迭代加深超时哨兵
+const AI_VAL = { soldier: 100, clone: 350, king: 2000 }; // MVV-LVA 排序用子力值
+let aiNodes = 0;                         // 本次搜索展开节点数（调试用）
+let aiHistory = null;                    // history 启发式表 [fromIdx*361+toIdx]：每次选着重置
+
+// sim = { occ, pieces, turn, lostClone, cloneUnlocked }
+// occ: Int16Array(361)，occ[r*19+c]=pieces 下标，-1=空；被吃子标记 dead 不移出数组（下标稳定）
+function makeSim() {
+  const ps = pieces.map((p, i) => ({
+    idx: i, id: p.id, side: p.side, type: p.type, col: p.col, row: p.row,
+    state: p.state, isClone: p.isClone, hasMoved: p.hasMoved,
+    activelyUnlocked: p.activelyUnlocked, dead: false,
+  }));
+  const occ = new Int16Array(361);
+  occ.fill(-1);
+  for (const p of ps) occ[p.row * 19 + p.col] = p.idx;
+  return {
+    occ, pieces: ps, turn,
+    lostClone: { white: sideLostClone.white, black: sideLostClone.black },
+    cloneUnlocked: { white: sideCloneUnlocked.white, black: sideCloneUnlocked.black },
+  };
+}
+function simClone(sim) {
+  return {
+    occ: sim.occ.slice(),
+    pieces: sim.pieces.map(p => ({ ...p })),
+    turn: sim.turn,
+    lostClone: { ...sim.lostClone },
+    cloneUnlocked: { ...sim.cloneUnlocked },
+  };
+}
+// 查子 O(1)（翻版自 pieceAt L712）
+function simAt(sim, c, r) {
+  const i = sim.occ[r * 19 + c];
+  if (i < 0) return null;
+  const p = sim.pieces[i];
+  return p.dead ? null : p;
+}
+// 是否存在至少一个可达格（零分配短路；评估机动性用，容忍「吃无敌王」过滤的极小误差）
+function simHasReach(sim, piece) {
+  if (piece.state === "imprisoned_invincible") return false;
+  const maxStep = piece.state === "berserk" ? 18 : 2;
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= maxStep; s++) {
+      const nc = piece.col + dc * s, nr = piece.row + dr * s;
+      if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+      const i = sim.occ[nr * 19 + nc];
+      if (i < 0) return true;
+      const o = sim.pieces[i];
+      if (o.dead) return true;
+      if (o.side !== piece.side) return true; // 敌：该格可吃
+      // 己方：穿过继续
+    }
+  }
+  return false;
+}
+// 武王理论范围几何判定（等价 theoreticalRange L773，忽略阻挡；零分配）：
+// 非暴走=切比雪夫距离≤2；暴走=8 方向射线（同行/同列/同对角线）
+function simInTheoryRange(king, c, r) {
+  const dc = Math.abs(king.col - c), dr = Math.abs(king.row - r);
+  if (dc + dr === 0) return false;
+  if (king.state !== "berserk") return Math.max(dc, dr) <= 2;
+  return dc === 0 || dr === 0 || dc === dr;
+}
+// 是否覆盖指定格（零分配、命中即停；用于禁锢统计与评估）
+function simCanAttack(sim, piece, tc, tr) {
+  if (piece.state === "imprisoned_invincible") return false;
+  const maxStep = piece.state === "berserk" ? 18 : 2;
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= maxStep; s++) {
+      const nc = piece.col + dc * s, nr = piece.row + dr * s;
+      if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+      if (nc === tc && nr === tr) return true; // 目标格（王所在格）先于阻挡判定
+      const i = sim.occ[nr * 19 + nc];
+      if (i < 0) continue;
+      const o = sim.pieces[i];
+      if (o.dead) continue;
+      if (o.side === piece.side) continue; // 己方可穿过
+      break; // 敌方阻挡射线
+    }
+  }
+  return false;
+}
+// 覆盖武王的敌方棋子数（翻版自 isImprisoned L787 的统计部分；评估复用）
+function simCoverage(sim, king) {
+  let n = 0;
+  for (const p of sim.pieces) {
+    if (p.dead || p.side === king.side) continue;
+    if (p.state === "imprisoned_invincible") continue;
+    if (simCanAttack(sim, p, king.col, king.row)) n++;
+  }
+  return n;
+}
+function simKingOf(sim, side) { // → kingOf L800
+  for (const p of sim.pieces) {
+    if (!p.dead && p.side === side && p.type === "king" && !p.isClone) return p;
+  }
+  return null;
+}
+function simBigCount(sim, side) { // → bigCount L801
+  let n = 0;
+  for (const p of sim.pieces) {
+    if (!p.dead && p.side === side && (p.type === "king" || p.type === "clone")) n++;
+  }
+  return n;
+}
+// 某方是否解锁态（翻版自 sideUnlocked L883）
+function simSideUnlocked(sim, side) {
+  for (const p of sim.pieces) {
+    if (p.dead || p.side !== side) continue;
+    if (p.type === "clone") return true;
+    if (p.type === "king" && p.state !== "imprisoned_invincible") return true;
+  }
+  return false;
+}
+// 被动重算禁锢（翻版自 recomputeKingStates L805）
+function simKingStates(sim) {
+  for (const k of sim.pieces) {
+    if (k.dead || k.type !== "king" || k.isClone) continue;
+    if (k.state === "berserk") continue;
+    if (k.hasMoved || k.activelyUnlocked) k.state = "free";
+    else k.state = simCoverage(sim, k) >= 2 ? "imprisoned_invincible" : "free";
+  }
+}
+// 暴走判定（翻版自 berserkCheck L831，含对方解禁锢副作用）
+function simBerserkCheck(sim, moved) {
+  if (moved.type !== "king" && moved.type !== "clone") return;
+  if (moved.state === "berserk") return;
+  if (!inPalace(moved.side, moved.col, moved.row)) return;
+  moved.state = "berserk";
+  if (moved.type === "king") moved.hasMoved = true;
+  sim.lostClone[moved.side] = true;
+  for (const k of sim.pieces) {
+    if (k.dead || k.side === moved.side) continue;
+    if (k.type !== "king" || k.isClone) continue;
+    k.hasMoved = true;
+    if (k.state !== "berserk") k.state = "free";
+    k.activelyUnlocked = true;
+  }
+}
+// 首个可转化士兵（对应全局 settleMove L1009「取 cloneCandidates[0]」的顺序）
+function simFirstCloneCand(sim, moved) {
+  if (moved.type === "soldier") {
+    // 情形一：士兵进入己方武王范围 → 转化该士兵
+    for (const k of sim.pieces) {
+      if (k.dead || k.side !== moved.side) continue;
+      if (k.type !== "king" && k.type !== "clone") continue;
+      if (simInTheoryRange(k, moved.col, moved.row)) return moved;
+    }
+    return null;
+  }
+  // 情形二：武王/分身进入士兵范围 → 转化范围内首个士兵
+  for (const s of sim.pieces) {
+    if (s.dead || s.side !== moved.side || s.type !== "soldier") continue;
+    if (simInTheoryRange(moved, s.col, s.row)) return s;
+  }
+  return null;
+}
+// 是否存在分身提示（翻版自 cloneOfferCheck L860，仅返回 bool，不写全局候选）
+function simCloneOffered(sim, moved) {
+  if (sim.lostClone[moved.side]) return false;
+  if (!sim.cloneUnlocked[moved.side]) return false;
+  if (simBigCount(sim, moved.side) >= 2) return false;
+  return !!simFirstCloneCand(sim, moved);
+}
+// 执行一步（翻版自 doMove L972，含主动解锁 activeUnlockCheck L818）
+function simDoMove(sim, piece, col, row) {
+  let captured = null;
+  const ti = sim.occ[row * 19 + col];
+  if (ti >= 0) {
+    const t = sim.pieces[ti];
+    if (!t.dead && t.side !== piece.side) { captured = t; t.dead = true; }
+  }
+  sim.occ[piece.row * 19 + piece.col] = -1;
+  piece.col = col; piece.row = row;
+  sim.occ[row * 19 + col] = piece.idx;
+  // 武王本体首次移动：失去无敌、解锁分身能力
+  if (piece.type === "king" && !piece.isClone && !piece.hasMoved) {
+    piece.hasMoved = true;
+    sim.cloneUnlocked[piece.side] = true;
+  }
+  simBerserkCheck(sim, piece);
+  // 主动解锁：进入己方禁锢武王的理论范围
+  for (const k of sim.pieces) {
+    if (k.dead || k.side !== piece.side) continue;
+    if (k.type !== "king" || k.isClone) continue;
+    if (k.state !== "imprisoned_invincible") continue;
+    if (simInTheoryRange(k, col, row)) k.activelyUnlocked = true;
+  }
+  const offered = simCloneOffered(sim, piece);
+  simKingStates(sim);
+  return { captured, offered };
+}
+// 胜负判定，返回胜方或 null（翻版自 checkWinLoss L894）
+function simWinner(sim) {
+  const count = { white: { big: 0, soldier: 0 }, black: { big: 0, soldier: 0 } };
+  let wKing = null, bKing = null;
+  for (const p of sim.pieces) {
+    if (p.dead) continue;
+    const c = count[p.side];
+    if (p.type === "king" || p.type === "clone") c.big++;
+    else c.soldier++;
+    if (p.type === "king" && !p.isClone) { if (p.side === "white") wKing = p; else bKing = p; }
+  }
+  if (count.white.big === 0 && simSideUnlocked(sim, "black")) return "black";
+  if (count.black.big === 0 && simSideUnlocked(sim, "white")) return "white";
+  if (wKing && wKing.state === "imprisoned_invincible" && count.white.soldier === 0) return "black";
+  if (bKing && bKing.state === "imprisoned_invincible" && count.black.soldier === 0) return "white";
+  return null;
+}
+// 停棋负（翻版自 hasAnyMove L905，零分配短路；严格处理「唯一着法为吃无敌王」的罕见情形）
+function simHasAnyMove(sim, side) {
+  for (const p of sim.pieces) {
+    if (p.dead || p.side !== side) continue;
+    if (p.state === "imprisoned_invincible") continue;
+    const maxStep = p.state === "berserk" ? 18 : 2;
+    for (const [dc, dr] of DIRS) {
+      for (let s = 1; s <= maxStep; s++) {
+        const nc = p.col + dc * s, nr = p.row + dr * s;
+        if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+        const i = sim.occ[nr * 19 + nc];
+        if (i < 0) return true;
+        const t = sim.pieces[i];
+        if (t.dead) return true;
+        if (t.side !== side) {
+          if (!(t.type === "king" && !t.hasMoved)) return true;
+          break; // 敌方无敌王：阻挡且不可吃
+        }
+        // 己方：穿过
+      }
+    }
+  }
+  return false;
+}
+// 结算（翻版自 settleMove L1005）：分身转化 → 胜负 → 换边 → 停棋负。
+// 注意与全局 settleMove 的差异：**终局返回前也先换边**，使 sim.turn 恒为"下一走子方"，
+// 搜索侧 rec/qsearch 据此判胜败（winner === sim.turn → 对方胜）。
+// 不保留三次重复平局（不建 positionCounts；±(AI_M−ply) 使 AI 天然拒绝循环）。
+function simSettle(sim, piece, res, cloneDecision) {
+  if (res.offered && cloneDecision && simBigCount(sim, piece.side) < 2) {
+    const s = simFirstCloneCand(sim, piece);
+    if (s) {
+      s.type = "clone"; s.isClone = true; s.state = "free";
+      simBerserkCheck(sim, s); // 分身诞生于己方王城 → 立即暴走
+      simKingStates(sim);
+    }
+  }
+  const w = simWinner(sim);
+  sim.turn = sim.turn === "white" ? "black" : "white"; // 恒换边（与全局 settleMove 的差异点）
+  if (w) return w;
+  if (!simHasAnyMove(sim, sim.turn)) return sim.turn === "white" ? "black" : "white"; // 停棋负
+  return null;
+}
+
+// 着法生成（内联方向扫描，无中间数组）：{idx, fromIdx, toCol, toRow, capture}
+// 规则等价 reachableCells+legalMoves（L741/L764）：不穿敌、吃敌后停、穿己方、不吃无敌王
+function simGenMoves(sim, side) {
+  const moves = [];
+  for (const p of sim.pieces) {
+    if (p.dead || p.side !== side) continue;
+    if (p.state === "imprisoned_invincible") continue;
+    const maxStep = p.state === "berserk" ? 18 : 2;
+    const fromIdx = p.row * 19 + p.col;
+    for (const [dc, dr] of DIRS) {
+      for (let s = 1; s <= maxStep; s++) {
+        const nc = p.col + dc * s, nr = p.row + dr * s;
+        if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
+        const i = sim.occ[nr * 19 + nc];
+        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        const t = sim.pieces[i];
+        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (t.side === side) continue;            // 己方可穿过
+        if (t.type === "king" && !t.hasMoved) break; // 敌方无敌王：不可吃、阻挡
+        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: true });
+        break; // 吃敌后停
+      }
+    }
+  }
+  return moves;
+}
+// 着法排序：吃子着法（MVV-LVA）> killer 着法 > history 启发；ply<0 时不用 killer（静态搜索）
+function simSortMoves(sim, moves, ply) {
+  const k1 = ply >= 0 && ply < 64 ? KILLERS[ply * 2] : -1;
+  const k2 = ply >= 0 && ply < 64 ? KILLERS[ply * 2 + 1] : -1;
+  for (const mv of moves) {
+    const enc = mv.idx * 361 + mv.toRow * 19 + mv.toCol;
+    mv.enc = enc;
+    if (mv.capture) {
+      const t = simAt(sim, mv.toCol, mv.toRow);
+      mv.ord = 200000 + (t ? (AI_VAL[t.type] || 100) : 100);
+    } else if (enc === k1) mv.ord = 150000;
+    else if (enc === k2) mv.ord = 140000;
+    else mv.ord = aiHistory ? aiHistory[mv.fromIdx * 361 + mv.toIdx] : 0;
+  }
+  moves.sort((a, b) => b.ord - a.ord);
+}
+
+// 分身能力期权分（评估子项）：可转化分身 ≈ 多一个 350 分大子的机会
+function aiCloneOption(sim, side) {
+  if (sim.lostClone[side] || !sim.cloneUnlocked[side]) return 0;
+  if (simBigCount(sim, side) >= 2) return 0;
+  for (const p of sim.pieces) if (!p.dead && p.side === side && p.type === "soldier") return 120;
+  return 0;
+}
+// 局面评估：返回 side 视角分值（值域远小于 AI_M）
+function simEval(sim, side) {
+  const opp = side === "white" ? "black" : "white";
+  let my = 0, op = 0, myMob = 0, opMob = 0, mySoldiers = 0, opSoldiers = 0;
+  let myKing = null, opKing = null;
+  for (const p of sim.pieces) {
+    if (p.dead) continue;
+    let v;
+    if (p.type === "soldier") { v = 100; if (p.side === side) mySoldiers++; else opSoldiers++; }
+    else if (p.type === "clone") v = 350;
+    else {
+      v = 1500;                          // king 本体基础值（王亡=决定性）
+      // 王的战略状态：禁锢=停摆+灭子判负风险；已解锁（可动且仍无敌）=最佳态
+      if (p.state === "imprisoned_invincible") v -= 500;
+      else if (!p.hasMoved) v += 200;    // 解锁价值：可立即行棋 + 首动解锁分身
+    }
+    if (p.state === "berserk") v += 400; // 无限射线 + 攻王窗口
+    if (p.side === side) my += v; else op += v;
+    if (p.type === "king" && !p.isClone) { if (p.side === side) myKing = p; else opKing = p; }
+    if (simHasReach(sim, p)) { if (p.side === side) myMob++; else opMob++; }
+  }
+  let score = (my - op) + (myMob - opMob) * 2;
+  // 王脆弱项：可杀的王（hasMoved）是攻杀目标——对方脆弱利于我、己方脆弱不利于我。
+  // 权重刻意小于暴走加分：使「暴走解禁对方王」净收益为正（鼓励攻王），但不夸大「可杀」价值
+  // （可杀 ≠ 将杀，且对方王自由后同时获得机动与反扑能力）
+  if (myKing && myKing.hasMoved) score -= 300;
+  if (opKing && opKing.hasMoved) score += 300;
+  // 灭子判负风险：王禁锢且兵 ≤2，距「禁锢+兵全灭=判负」一步之遥
+  if (myKing && myKing.state === "imprisoned_invincible" && mySoldiers <= 2) score -= (3 - mySoldiers) * 150;
+  if (opKing && opKing.state === "imprisoned_invincible" && opSoldiers <= 2) score += (3 - opSoldiers) * 150;
+  score += aiCloneOption(sim, side) - aiCloneOption(sim, opp);
+  // 围王潜力：己兵→对方王切比雪夫距离（开局距离远，作用域放宽至 12 格）+ 对方王被覆盖数
+  if (opKing) {
+    score += simCoverage(sim, opKing) * 50;
+    for (const s of sim.pieces) {
+      if (s.dead || s.side !== side || s.type !== "soldier") continue;
+      const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
+      score += Math.max(0, 12 - d) * 5;
+    }
+  }
+  // 救王 / 主动解锁潜力：己王解除禁锢是判胜的必要条件（杀光对方王但己王未解锁不判胜），
+  // 故解锁梯度给高权重；兵已入解锁范围（d≤2）= 下一步即可解锁，重赏
+  if (myKing && myKing.state === "imprisoned_invincible") {
+    let best = 99;
+    for (const s of sim.pieces) {
+      if (s.dead || s.side !== side || s.type !== "soldier") continue;
+      const d = Math.max(Math.abs(s.col - myKing.col), Math.abs(s.row - myKing.row));
+      if (d < best) best = d;
+    }
+    if (best < 99) score += Math.max(0, 12 - best) * 6 + (best <= 2 ? 100 : 0);
+  }
+  return score;
+}
+
+/* ----- Zobrist 哈希 + 置换表（TT）+ killer 启发 ----- */
+const TT_SIZE = 1 << 18;
+const TT_K1 = new Int32Array(TT_SIZE), TT_K2 = new Int32Array(TT_SIZE);
+const TT_DEPTH = new Int8Array(TT_SIZE), TT_FLAG = new Int8Array(TT_SIZE); // flag: 0=exact 1=lower 2=upper
+const TT_SCORE = new Int32Array(TT_SIZE);
+const TT_BEST = new Int32Array(TT_SIZE);  // 最佳着编码 idx*361 + toRow*19+toCol，-1=无
+TT_BEST.fill(-1);
+const TT_USED = new Uint8Array(TT_SIZE);  // 槽位占用标志（避免全零键误命中）
+const Z1 = new Int32Array(361 * 72), Z2 = new Int32Array(361 * 72); // 棋子×格 随机数对
+const ZF1 = new Int32Array(16), ZF2 = new Int32Array(16);           // 分身标志位随机数对
+let ZT1 = 0, ZT2 = 0;                                              // 回合方（黑）异或值
+(function initZobrist() {
+  let seed = 0x9E3779B9 | 0;
+  function rnd() { // mulberry32（固定种子，确定性强）
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return (t ^ (t >>> 14)) | 0;
+  }
+  for (let i = 0; i < 361 * 72; i++) { Z1[i] = rnd(); Z2[i] = rnd(); }
+  for (let i = 0; i < 16; i++) { ZF1[i] = rnd(); ZF2[i] = rnd(); }
+  ZT1 = rnd(); ZT2 = rnd();
+})();
+const Z_TYPE = { soldier: 0, clone: 1, king: 2 };
+const Z_STATE = { imprisoned_invincible: 0, free: 1, berserk: 2 };
+const _HASH = { h1: 0, h2: 0 };
+// 全量哈希（O(P)，每节点一次；增量维护易错，性能已够）
+function simHash(sim) {
+  let h1 = sim.turn === "black" ? ZT1 : 0;
+  let h2 = sim.turn === "black" ? ZT2 : 0;
+  for (const p of sim.pieces) {
+    if (p.dead) continue;
+    const k = (p.side === "black" ? 36 : 0) + Z_TYPE[p.type] * 12 + Z_STATE[p.state] * 4
+            + (p.hasMoved ? 2 : 0) + (p.activelyUnlocked ? 1 : 0);
+    const pos = (p.row * 19 + p.col) * 72 + k;
+    h1 ^= Z1[pos]; h2 ^= Z2[pos];
+  }
+  const f = (sim.lostClone.white ? 1 : 0) | (sim.lostClone.black ? 2 : 0)
+          | (sim.cloneUnlocked.white ? 4 : 0) | (sim.cloneUnlocked.black ? 8 : 0);
+  h1 ^= ZF1[f]; h2 ^= ZF2[f];
+  _HASH.h1 = h1; _HASH.h2 = h2;
+  return _HASH;
+}
+// killer 启发：每 ply 两个引发截断的静默着法（ply 上限 64 足够）
+const KILLERS = new Int32Array(64 * 2);
+KILLERS.fill(-1);
+function clearTTState() { // 每次选着重置（TT 表本身保留，跨层/跨着复用）
+  KILLERS.fill(-1);
+}
+
+// 单子节点分值（父节点/走子方视角）；clone 提示展开 true/false 两分支取优
+function aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline) {
+  const child = simClone(sim);
+  const p = child.pieces[mv.idx];
+  const res = simDoMove(child, p, mv.toCol, mv.toRow);
+  const rec = (c, winner, a) => {
+    let s;
+    if (winner) s = (winner === c.turn) ? (AI_M - ply) : -(AI_M - ply);
+    else s = negamax(c, depth - 1, -beta, -a, ply + 1, deadline);
+    return -s; // 折算为父方视角
+  };
+  if (!res.offered) return rec(child, simSettle(child, p, res, false), alpha);
+  const c1 = simClone(child);
+  const s1 = rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
+  if (s1 >= beta) return s1; // 变身分支已触发截断，免搜不变身分支
+  const c0 = simClone(child);
+  const s0 = rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
+  return Math.max(s1, s0);
+}
+// 静态搜索（quiescence）：叶节点只延伸吃子链至安静局面，消除水平线效应。
+// delta 裁剪：吃子收益上限（被吃子价值+margin）仍够不到 α 则跳过；qDepth 为搜索内部层数（与主搜深度无关）。
+function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
+  aiNodes++;
+  if (deadline && (aiNodes & 1023) === 0 && Date.now() > deadline) throw AI_TIMEOUT;
+  const side = sim.turn;
+  const stand = simEval(sim, side);
+  if (stand >= beta) return stand; // stand pat：不吃也不会更差
+  if (stand > alpha) alpha = stand;
+  if (qDepth >= 4) return stand; // 吃子链硬上限（连环吃实战罕见超 2 层互吃）
+  const caps = [];
+  for (const mv of simGenMoves(sim, side)) {
+    if (!mv.capture) continue;
+    const t = simAt(sim, mv.toCol, mv.toRow);
+    if (stand + (t ? (AI_VAL[t.type] || 100) : 100) + 100 < alpha) continue; // delta 裁剪
+    caps.push(mv);
+  }
+  simSortMoves(sim, caps, -1); // MVV-LVA 排序提高 α-β 剪枝率（-1：静态搜索不用 killer）
+  for (const mv of caps) {
+    const child = simClone(sim);
+    const p = child.pieces[mv.idx];
+    const res = simDoMove(child, p, mv.toCol, mv.toRow);
+    const w = simSettle(child, p, res, false); // 静态搜索内不转化分身（简化）
+    const sc = w
+      ? (w === child.turn ? -(AI_M - ply) : (AI_M - ply))
+      : -qsearch(child, -beta, -alpha, ply + 1, deadline, qDepth + 1);
+    if (sc > alpha) alpha = sc;
+    if (alpha >= beta) break;
+  }
+  return alpha;
+}
+// negamax + α-β：返回 sim.turn（走子方）视角分值。ply=距根着数；deadline=0 不限时
+function negamax(sim, depth, alpha, beta, ply, deadline) {
+  aiNodes++;
+  if (deadline && (aiNodes & 1023) === 0 && Date.now() > deadline) throw AI_TIMEOUT;
+  const side = sim.turn;
+  // 置换表探测：命中且深度足够 → 按 flag 直接返回；未命中也取 PV 着法用于排序
+  const h = simHash(sim);
+  const ti = h.h1 & (TT_SIZE - 1);
+  let ttMove = -1;
+  if (TT_USED[ti] && TT_K1[ti] === h.h1 && TT_K2[ti] === h.h2) {
+    ttMove = TT_BEST[ti];
+    if (TT_DEPTH[ti] >= depth) {
+      const s = TT_SCORE[ti], f = TT_FLAG[ti];
+      if (f === 0) return s;
+      if (f === 1 && s >= beta) return s;
+      if (f === 2 && s <= alpha) return s;
+    }
+  }
+  const alpha0 = alpha;
+  const moves = simGenMoves(sim, side);
+  if (moves.length === 0) return -(AI_M - ply); // 无合法行动 → 停棋负
+  if (depth <= 0) return qsearch(sim, alpha, beta, ply, deadline, 0);
+  // RFP（静态空着裁剪）：让对手 margin×depth 优势后静态评估仍超 β → 剪枝（根附近不裁）
+  let staticEval = 0;
+  if (depth <= 2 && ply > 2) {
+    staticEval = simEval(sim, side);
+    if (staticEval - 300 * depth >= beta) return staticEval;
+  }
+  simSortMoves(sim, moves, ply);
+  if (ttMove >= 0) { // TT 最佳着提到最前（排序价值高于 killer）
+    const j = moves.findIndex(mv => mv.enc === ttMove);
+    if (j > 0) { const tmp = moves[0]; moves[0] = moves[j]; moves[j] = tmp; }
+  }
+  const futilityBase = depth === 1 ? (staticEval || simEval(sim, side)) : 0;
+  let best = -Infinity, bestEnc = -1;
+  for (let i = 0; i < moves.length; i++) {
+    const mv = moves[i];
+    // 叶前裁剪：depth=1 静默着法静态评估远低 α → 跳过
+    if (depth === 1 && !mv.capture && futilityBase + 300 <= alpha) continue;
+    let sc;
+    // LMR：深层节点靠后的静默着法先减一层搜索；若可能抬高 α 再全深度重搜
+    if (!mv.capture && depth >= 3 && i >= 4) {
+      sc = aiMoveScore(sim, mv, depth - 1, alpha, beta, ply, deadline);
+      if (sc > alpha) sc = aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline);
+    } else {
+      sc = aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline);
+    }
+    if (sc > best) { best = sc; bestEnc = mv.enc; }
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) {
+      if (aiHistory) aiHistory[mv.fromIdx * 361 + mv.toIdx] += depth * depth;
+      if (!mv.capture && ply < 64 && KILLERS[ply * 2] !== mv.enc) { // killer 更新
+        KILLERS[ply * 2 + 1] = KILLERS[ply * 2];
+        KILLERS[ply * 2] = mv.enc;
+      }
+      break;
+    }
+  }
+  if (best === -Infinity) best = futilityBase; // 全被叶前裁剪时回退静态评估
+  // 存入置换表（杀局分值 ±(AI_M−ply) 与 ply 相关、经局面转换不可复用，跳过）
+  if (best > -(AI_M / 2) && best < AI_M / 2) {
+    TT_USED[ti] = 1;
+    TT_K1[ti] = h.h1; TT_K2[ti] = h.h2;
+    TT_DEPTH[ti] = depth; TT_SCORE[ti] = best;
+    TT_FLAG[ti] = best <= alpha0 ? 2 : (best >= beta ? 1 : 0);
+    TT_BEST[ti] = bestEnc;
+  }
+  return best;
+}
+// 根节点选着：返回 {piece(真实棋子引用), toCol, toRow, clone}；无着返回 null
+function aiChooseMove(side, cfg) {
+  const t0 = Date.now();
+  aiNodes = 0;
+  aiHistory = new Int32Array(361 * 361); // history 启发式：仅本次选着内有效
+  clearTTState();                        // killer 重置；TT 表保留，跨迭代层与跨着复用
+  const root = makeSim();
+  const moves = simGenMoves(root, side);
+  if (moves.length === 0) return null;
+  simSortMoves(root, moves);
+  const maxDepth = cfg.depth || 1;
+  const deadline = cfg.timeLimitMs ? t0 + cfg.timeLimitMs : 0;
+  // scored 按分值降序迭代；大师档迭代加深（1..maxDepth），超时保留上一层完整结果
+  let scored = moves.map(mv => ({ mv, score: -Infinity, clone: false }));
+  let completed = 0;
+  for (let d = deadline ? 1 : maxDepth; d <= maxDepth; d++) {
+    const layer = [];
+    let aborted = false;
+    let alpha = -Infinity; // 滑动 α 窗：首着全窗，后续着法窄窗快速 fail-low
+    for (const prev of scored) {
+      const mv = prev.mv;
+      try {
+        const child = simClone(root);
+        const p = child.pieces[mv.idx];
+        const res = simDoMove(child, p, mv.toCol, mv.toRow);
+        const rec = (c, winner, a) => {
+          if (winner) return winner === c.turn ? -(AI_M - 1) : (AI_M - 1);
+          return -negamax(c, d - 1, -Infinity, -a, 1, deadline);
+        };
+        let score, clone = false;
+        if (!res.offered) {
+          score = rec(child, simSettle(child, p, res, false), alpha);
+        } else {
+          const c1 = simClone(child);
+          const s1 = rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
+          const c0 = simClone(child);
+          const s0 = rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
+          clone = s1 >= s0;
+          score = Math.max(s1, s0);
+        }
+        // exact：score 抬高了 α → 真值；否则为 fail-low 上界（不可参与同分随机）
+        layer.push({ mv, score, clone, exact: score > alpha });
+        if (score > alpha) alpha = score;
+      } catch (e) {
+        if (e !== AI_TIMEOUT) throw e;
+        aborted = true;
+        break;
+      }
+    }
+    if (!aborted) {
+      layer.sort((a, b) => b.score - a.score);
+      scored = layer;
+      completed = d;
+    }
+    if (aborted) break; // 本层不完整，沿用上一层结果
+  }
+  // 选着：高手/大师取最优（同分着法随机择一，避免固定循环、增加变化）；
+  // 菜鸟在 topN 内随机（出现吃子着放宽至 topN*2，少瞎送）
+  let pick = scored[0];
+  if (cfg.topN) {
+    let pool = scored.slice(0, cfg.topN);
+    const wider = scored.slice(0, cfg.topN * 2);
+    if (wider.some(s => s.mv.capture)) pool = wider;
+    pick = pool[Math.floor(Math.random() * pool.length)];
+  } else {
+    // 同分随机仅限真值着法（exact）：fail-low 上界造成的"伪同分"不得入池，否则退化为随机选着
+    let n = 1;
+    while (n < scored.length && scored[n].exact && scored[n].score === scored[0].score) n++;
+    if (n > 1) pick = scored[Math.floor(Math.random() * n)];
+  }
+  const simP = root.pieces[pick.mv.idx];
+  const piece = pieces.find(p => p.id === simP.id);
+  console.log("[AI] level=" + (cfg.label || aiLevel) + " depth=" + completed + "/" + maxDepth
+    + " nodes=" + aiNodes + " time=" + (Date.now() - t0) + "ms score=" + pick.score);
+  if (!piece) return null;
+  return { piece, toCol: pick.mv.toCol, toRow: pick.mv.toRow, clone: pick.clone };
 }
 
 /* =========================================================
@@ -1574,7 +2242,7 @@ function drawPieces() {
 /* ----- 棋子 hover 缩放反馈：仅当前可行动棋子生效，平滑缓入缓出 ----- */
 function hoverEligible(p) { return !!p && p.side === turn && legalMoves(p).length > 0; }
 function recomputeHoverAt(ix, iy) {
-  if (setupMode || gameOver || (replayMode && !studyMode)) { hoveredPiece = null; lastHoverCell = null; return; }
+  if (setupMode || gameOver || (replayMode && !studyMode) || aiBusy || (aiSide && turn === aiSide)) { hoveredPiece = null; lastHoverCell = null; return; }
   const cell = xyToCell(ix, iy);
   const key = cell ? cell[0] + "," + cell[1] : null;
   if (key === lastHoverCell) return; // 同一格内不重复计算 legalMoves
@@ -1686,6 +2354,7 @@ function updatePanel() {
 canvas.addEventListener("click", (e) => {
   if (replayMode && !studyMode) return;
   if (gameOver) return;
+  if (aiBusy || (aiSide && turn === aiSide)) return; // AI 回合 / AI 思考中：禁止人类操作棋盘
   const rect = canvas.getBoundingClientRect();
   const x0 = (e.clientX - rect.left) * (canvas.width / rect.width);
   const y0 = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -1789,19 +2458,76 @@ function rebuildLegalMap() {
   }
 }
 
+/* ----- AI 走子管线：调度 + 落子（仿人类链 L1750-1754 与 applyRecord 模式，绕过 finishTurn 的 confirm 弹窗） ----- */
+// 轮到 AI 则排队一次思考；令牌制防竞态：排程期间任何 newGame/undo/redo/复盘/摆子 都会使令牌失效
+function aiMaybeSchedule() {
+  if (!aiSide || turn !== aiSide) return;
+  if (gameOver || replayMode || studyMode || setupMode || aiBusy) return;
+  const token = ++aiToken;
+  aiBusy = true;
+  document.getElementById("hint").textContent = "AI 思考中…";
+  setTimeout(() => {
+    try {
+      if (token !== aiToken) return; // 思考期间局面已被新局/悔棋等改变
+      if (turn !== aiSide || gameOver || replayMode || studyMode || setupMode) return;
+      const mv = aiChooseMove(aiSide, AI_LEVELS[aiLevel] || AI_LEVELS.advanced);
+      if (token !== aiToken) return;
+      if (mv) aiPlayMove(mv);
+    } finally {
+      aiBusy = false;
+    }
+  }, 30); // 让「AI 思考中…」先上屏
+}
+// AI 落子：快照 → 走子 → 结算 → 记谱 → 渲染（与人类落子完全同构，记谱共用 buildRecord）
+function aiPlayMove(mv) {
+  const piece = mv.piece;
+  const ctx = {
+    fromCol: piece.col, fromRow: piece.row,
+    moverTypeBefore: piece.type,
+    wasFirstKingMove: (piece.type === "king" && !piece.isClone && !piece.hasMoved),
+    wasBerserk: piece.state === "berserk",
+  };
+  pushHistory();
+  const res = doMove(piece, mv.toCol, mv.toRow);
+  render();
+  const r = settleMove(piece, res, mv.clone);
+  moveLog.push(buildRecord(piece, res, ctx, r));
+  if (r.terminal) {
+    render(); renderScoresheet();
+    announce(r.terminal);
+    return;
+  }
+  render(); renderScoresheet();
+}
+
 document.getElementById("btn-new").addEventListener("click", newGame);
-document.getElementById("btn-undo").addEventListener("click", undo);
-document.getElementById("btn-redo").addEventListener("click", redo);
+// AI 模式悔棋语义：AI 已应着（轮到人类）时连撤「AI+人类」两手；AI 回合中（AI 尚未落子）只撤人类上一步。
+// 终局是特例：终局时 turn 指向收束方而非轮走方，AI 获胜后也连撤两手，让人类重新行棋。
+function humanUndo() {
+  if (undoStack.length === 0) return;
+  const twice = aiSide && undoStack.length >= 2 && (turn !== aiSide || gameOver);
+  undo();
+  if (twice) undo();
+}
+// 撤销悔棋对称：连复两手（第二次 redo 的令牌自增会使第一次触发的 AI 调度作废）
+function humanRedo() {
+  if (redoStack.length === 0) return;
+  const twice = aiSide && redoStack.length >= 2;
+  redo();
+  if (twice) redo();
+}
+document.getElementById("btn-undo").addEventListener("click", humanUndo);
+document.getElementById("btn-redo").addEventListener("click", humanRedo);
 document.getElementById("preset").addEventListener("change", (e) => {
   currentPreset = e.target.value;
   newGame(); // 自定义同内置档位：已存阵容直接开局；尚未创建时 newGame 检测空局自动进摆子
 });
 
-/* ----- 自定义档位下拉：主题化弹层，写回隐藏 #preset 并触发其 change ----- */
-(function setupPresetDropdown() {
-  const dd = document.getElementById("preset-dd");
-  const sel = document.getElementById("preset");
-  const trigger = document.getElementById("preset-trigger");
+/* ----- 通用主题化下拉：隐藏 select 持状态、主题化弹层；选项点击写回 select 并派发 change 复用其监听 ----- */
+function makeDropdown(ddId) {
+  const dd = document.getElementById(ddId);
+  const sel = dd.querySelector("select");
+  const trigger = dd.querySelector(".cdd-trigger");
   const valEl = dd.querySelector(".cdd-val");
   const opts = Array.from(dd.querySelectorAll(".cd-opt"));
   function labelFor(v) { const o = opts.find(x => x.dataset.val === v); return o ? o.querySelector(".cd-name").textContent : ""; }
@@ -1818,15 +2544,31 @@ document.getElementById("preset").addEventListener("change", (e) => {
   opts.forEach(o => o.addEventListener("click", () => {
     if (o.dataset.val === sel.value) { setOpen(false); return; }
     sel.value = o.dataset.val;
-    sel.dispatchEvent(new Event("change")); // 复用既有监听：更新 currentPreset + newGame
+    sel.dispatchEvent(new Event("change")); // 复用 select 自身的 change 监听
     syncDisplay();
     setOpen(false);
   }));
   document.addEventListener("click", (e) => { if (!dd.contains(e.target)) setOpen(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
-  window.syncPresetDropdown = syncDisplay;
   syncDisplay();
-})();
+  return {
+    sync: syncDisplay,
+    setDisabled(d) { sel.disabled = d; dd.classList.toggle("is-disabled", d); },
+  };
+}
+window.syncPresetDropdown = makeDropdown("preset-dd").sync;
+const levelDropdown = makeDropdown("level-dd");
+makeDropdown("opponent-dd");
+// 对手切换：写入 aiSide 并以新设置开局；难度即时生效（影响下一次 AI 思考）
+document.getElementById("opponent").addEventListener("change", (e) => {
+  aiSide = e.target.value === "ai-black" ? "black" : (e.target.value === "ai-white" ? "white" : null);
+  levelDropdown.setDisabled(!aiSide);
+  newGame();
+});
+document.getElementById("level").addEventListener("change", (e) => {
+  aiLevel = e.target.value;
+});
+levelDropdown.setDisabled(true); // 默认双人对弈，难度禁用
 
 /* ----- 摆子模式接线 ----- */
 document.getElementById("btn-edit-setup").addEventListener("click", enterSetup);
@@ -1923,6 +2665,7 @@ document.getElementById("btn-exit-study").addEventListener("click", exitStudy);
 
 
 function newGame() {
+  aiToken++; // 作废已排队的 AI 思考
   setupMode = false;
   initPieces();
   hoveredPiece = null; lastHoverCell = null;
@@ -1950,6 +2693,7 @@ function newGame() {
   document.getElementById("hint").textContent = "白方先行。点击己方棋子选择，再点击高亮格落子。";
   render();
   renderScoresheet();
+  aiMaybeSchedule(); // AI 执白时首步由此触发
 }
 
 /* =========================================================
@@ -1977,6 +2721,7 @@ function setupToolLabel(t) {
   return { white_king: "周武王", white_soldier: "周兵", black_king: "商纣王", black_soldier: "商卒", erase: "橡皮" }[t] || t;
 }
 function enterSetup() {
+  aiToken++; // 作废已排队的 AI 思考
   setupSnapshot = snapshot();      // 进入前对局快照，供「退出摆子」有改动时还原
   setupEntryPreset = currentPreset; // 记住进入时的档位（退出有改动时切回）
   setupDirty = false;               // 本次尚未改动棋子
@@ -2079,6 +2824,7 @@ function startFromSetup() {
     : "已校验并开始（未改动，保留「" + ((PRESETS[setupEntryPreset] || {}).name || "自定义") + "」档）。";
   render();
   renderScoresheet();
+  aiMaybeSchedule(); // 摆子后若 AI 执白先手，触发首步
 }
 
 /* =========================================================
