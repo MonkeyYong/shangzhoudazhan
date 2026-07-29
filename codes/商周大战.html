@@ -22,7 +22,8 @@
     padding: 10px; border-radius: 8px;
     box-shadow: 0 6px 24px rgba(0,0,0,.6), inset 0 0 0 2px var(--wrap-ring);
   }
-  canvas { display: block; cursor: pointer; }
+  /* 显示尺寸固定 640，与 width 属性（高分辨率物理像素）解耦，避免高 DPI 桌面棋盘被撑大；移动端媒体查询用 width:100% 覆盖 */
+  canvas { display: block; cursor: pointer; touch-action: manipulation; width: 640px; height: 640px; }
   :root{
     --gold: #e8c34a;
     --gold-soft: rgba(232,195,74,.45);
@@ -273,6 +274,17 @@
   #replay-controls { display: none; }
   #study-nav { display: none; }
   #file-import { display: none; }
+
+  /* ===== 移动端适配：窄屏下棋盘全宽在上、面板自适应高度在下 ===== */
+  @media (max-width: 1000px) {
+    #app { flex-direction: column; align-items: stretch; gap: 12px; padding: 10px; }
+    #board-wrap { width: 100%; padding: 8px; }
+    canvas { width: 100%; height: auto; }
+    #panel { width: auto; flex: none; height: auto; }
+    .sect-grow { flex: 0 1 auto; }
+    #movelist { max-height: 220px; }
+    #rules { width: auto; height: auto; max-height: 70vh; }
+  }
 </style>
 </head>
 <body>
@@ -475,6 +487,7 @@
 const SIZE = 19;
 const COL_LETTERS = "ABCDEFGHJKLMNOPQRST"; // 跳过 I
 const MARGIN = 32, CELL = 32;
+const BOARD_PX = MARGIN * 2 + (SIZE - 1) * CELL; // 逻辑棋盘边长 640：所有绘制/坐标换算均基于此，与 canvas 物理像素解耦
 // 棋子绘制半径(px)与 hover 缩放：放大棋子、悬停可行动棋子时平滑放大
 const STONE_R_SMALL = 11;   // 兵/卒
 const STONE_R_BIG   = 14;   // 武王/分身
@@ -1933,7 +1946,25 @@ function aiChooseMove(side, cfg) {
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 
+// 画布物理像素跟随 CSS 尺寸 × devicePixelRatio，保证高分屏清晰；绘制统一走 render() 内的逻辑坐标变换
+function fitCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const px = Math.round(canvas.clientWidth * dpr);
+  if (px > 0 && canvas.width !== px) {
+    canvas.width = px; canvas.height = px;
+    buildBgCache();
+    render();
+  }
+}
+let _fitRaf = 0;
+window.addEventListener("resize", () => {
+  if (_fitRaf) return;
+  _fitRaf = requestAnimationFrame(() => { _fitRaf = 0; fitCanvas(); });
+});
+
 function render() {
+  // 物理像素（CSS 尺寸 × devicePixelRatio）→ 逻辑 640×640：绘制代码与点击换算统一走逻辑坐标
+  ctx.setTransform(canvas.width / BOARD_PX, 0, 0, canvas.height / BOARD_PX, 0, 0);
   drawBoard();
   drawHighlights();
   drawPieces();
@@ -1944,14 +1975,14 @@ function drawBoard() {
   // 木质底色：径向渐变营造温润深浅
   const S = SKINS[currentSkin].board;
   if (_bgCache) {
-    ctx.drawImage(_bgCache, 0, 0); // 复杂皮肤：直接贴离屏缓存
+    ctx.drawImage(_bgCache, 0, 0, BOARD_PX, BOARD_PX); // 复杂皮肤：高分辨率离屏缓存缩放到逻辑尺寸
   } else {
-    const bg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 80,
-                                        canvas.width/2, canvas.height/2, canvas.width*0.75);
+    const bg = ctx.createRadialGradient(BOARD_PX/2, BOARD_PX/2, 80,
+                                        BOARD_PX/2, BOARD_PX/2, BOARD_PX*0.75);
     bg.addColorStop(0, S.bg0);
     bg.addColorStop(1, S.bg1);
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, BOARD_PX, BOARD_PX);
   }
 
   // 王庭立体平台（底座 + 斜面，置于网格之下）
@@ -1995,10 +2026,10 @@ function drawBoard() {
   for (let i = 0; i < SIZE; i++) {
     const [x, yTop] = cellToXY(i, 18);
     ctx.fillText(COL_LETTERS[i], x, MARGIN/2);
-    ctx.fillText(COL_LETTERS[i], x, canvas.height - MARGIN/2);
+    ctx.fillText(COL_LETTERS[i], x, BOARD_PX - MARGIN/2);
     const [xL, y] = cellToXY(0, i);
     ctx.fillText(String(i+1), MARGIN/2, y);
-    ctx.fillText(String(i+1), canvas.width - MARGIN/2, y);
+    ctx.fillText(String(i+1), BOARD_PX - MARGIN/2, y);
   }
   ctx.restore();
 }
@@ -2374,8 +2405,8 @@ canvas.addEventListener("click", (e) => {
   if (gameOver) return;
   if (aiBusy || (aiSide && turn === aiSide)) return; // AI 回合 / AI 思考中：禁止人类操作棋盘
   const rect = canvas.getBoundingClientRect();
-  const x0 = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const y0 = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const x0 = (e.clientX - rect.left) * (BOARD_PX / rect.width);
+  const y0 = (e.clientY - rect.top) * (BOARD_PX / rect.height);
   const cell0 = xyToCell(x0, y0);
   if (setupMode) {
     if (!cell0) return;
@@ -2400,8 +2431,8 @@ canvas.addEventListener("click", (e) => {
     render();
     return;
   }
-  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const x = (e.clientX - rect.left) * (BOARD_PX / rect.width);
+  const y = (e.clientY - rect.top) * (BOARD_PX / rect.height);
   const cell = xyToCell(x, y);
   if (!cell) { selected = null; legalMap.clear(); render(); return; }
   const [col, row] = cell;
@@ -2458,8 +2489,8 @@ canvas.addEventListener("click", (e) => {
 
 canvas.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
-  const ix = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const iy = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const ix = (e.clientX - rect.left) * (BOARD_PX / rect.width);
+  const iy = (e.clientY - rect.top) * (BOARD_PX / rect.height);
   const prev = hoveredPiece;
   recomputeHoverAt(ix, iy);
   if (hoveredPiece !== prev) kickHover();
@@ -2861,6 +2892,7 @@ syncCustomSub();
 initPieces();
 buildSkinRow();
 currentSkin = loadSkin();
+fitCanvas(); // 先按当前 CSS 尺寸定好画布物理分辨率，applySkin 才能以正确尺寸建皮肤缓存
 applySkin(currentSkin); // 应用皮肤：写入面板 CSS 变量 + 整盘重绘
 renderScoresheet();
 </script>
