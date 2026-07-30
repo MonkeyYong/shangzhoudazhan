@@ -197,7 +197,8 @@
   .sp-dot.ws { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
   .sp-dot.bk { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
   .sp-dot.bs { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
-  .setup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .setup-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .setup-actions > .setup-group { display: flex; flex-direction: column; gap: 6px; }
   #btn-setup-exit {
     background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
   }
@@ -327,7 +328,7 @@
           <label class="cfg-cap" for="preset">档位</label>
           <div class="cdd cdd-slim" id="preset-dd">
             <select id="preset" aria-hidden="true" tabindex="-1">
-              <option value="small">小局 (14子)</option>
+              <option value="small">小战 (14子)</option>
               <option value="battle" selected>大战 (22子)</option>
               <option value="final">决战 (34子)</option>
               <option value="custom">自定义</option>
@@ -336,7 +337,7 @@
               <span class="cdd-val"></span><span class="cdd-arrow"></span>
             </button>
             <div class="cdd-pop" role="listbox">
-              <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小局</span><span class="cd-sub">14 子</span></div>
+              <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小战</span><span class="cd-sub">14 子</span></div>
               <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">22 子</span></div>
               <div class="cd-opt" data-val="final" role="option"><span class="cd-name">决战</span><span class="cd-sub">34 子</span></div>
               <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
@@ -411,13 +412,24 @@
           <div class="sp-chip" data-tool="white_soldier"><span class="sp-dot ws"></span>周兵</div>
           <div class="sp-chip" data-tool="black_king"><span class="sp-dot bk"></span>商纣王</div>
           <div class="sp-chip" data-tool="black_soldier"><span class="sp-dot bs"></span>商卒</div>
+          <div class="sp-chip" data-tool="white_horse"><span class="sp-dot ws"></span>周马</div>
+          <div class="sp-chip" data-tool="black_horse"><span class="sp-dot bs"></span>商马</div>
         </div>
         <div class="setup-actions">
-          <div class="sp-chip erase" data-tool="erase">橡皮擦</div>
-          <button id="btn-setup-clear">清空</button>
-          <button id="btn-setup-exit">退出摆子 ✕</button>
-          <button id="btn-setup-start" class="btn-primary">校验并保存</button>
+          <div class="setup-group">
+            <button class="sp-chip erase" data-tool="erase">橡皮擦</button>
+            <button id="btn-setup-clear">清空</button>
+          </div>
+          <div class="setup-group">
+            <button id="btn-setup-export">导出布局</button>
+            <button id="btn-setup-import">导入布局</button>
+          </div>
+          <div class="setup-group">
+            <button id="btn-setup-start" class="btn-primary">校验并保存</button>
+            <button id="btn-setup-exit">退出摆子 ✕</button>
+          </div>
         </div>
+        <input type="file" id="file-import-layout" accept=".json,application/json" style="display:none">
       </div>
       <div id="replay-controls">
         <div id="replay-nav">
@@ -471,7 +483,7 @@
     <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「难度」分菜鸟（休闲）、高手（稳健）、大师（深算）三档，双人模式下禁用，切换即时生效。</p>
     <p>AI 模式下悔棋一次连撤两手（AI 着 + 人类着）；若 AI 尚未应着，则只撤回人类上一步。撤销悔棋对称恢复。</p>
     <h3>开局档位</h3>
-    <p>小局 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
+    <p>小战 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
     <h3>记谱与复盘</h3>
     <p>对局自动记录坐标式棋谱（如「1. 白兵 K6→K8 ×黑卒」），显示于右面板下方，含首动/分身/暴走/终局标记。</p>
     <p>「导出棋谱」保存为 .json 文件；「导入棋谱」加载文件进入复盘模式，可用首步/前一步/后一步/末步逐步回看。「复盘本局」对当前棋谱复盘。</p>
@@ -501,7 +513,7 @@ const WHITE_PALACE = { c0: 7, c1: 11, r0: 0, r1: 3 };  // 白方(底部) H-M / 1
 const BLACK_PALACE = { c0: 7, c1: 11, r0: 15, r1: 18 }; // 黑方(顶部) H-M / 16-19
 
 /* =========================================================
- * 开局配置：3 个固定档位（小局/大战/决战），摆法见 docs 截图
+ * 开局配置：3 个固定档位（小战/大战/决战），摆法见 docs 截图
  * 仅列白方半局（武王+兵），黑方由中心对称 (18-c,18-r) 换色生成，保证 K10 对称
  * ========================================================= */
 const WHITE_HALF = {
@@ -536,7 +548,7 @@ function buildLayout(key) {
   return out;
 }
 const PRESETS = {
-  small:  { name: "小局", layout: buildLayout("small")  },
+  small:  { name: "小战", layout: buildLayout("small")  },
   battle: { name: "大战", layout: buildLayout("battle") },
   final:  { name: "决战", layout: buildLayout("final")  },
 };
@@ -882,16 +894,34 @@ function syncCustomSub() {
   if (el) el.textContent = (customLayout && customLayout.length) ? customLayout.length + " 子" : "自由摆子";
 }
 
-// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
-function initPieces() {
-  nextId = 1;
-  let data;
-  if (currentPreset === "custom") {
-    data = customLayout || [];
-  } else {
-    data = PRESETS[currentPreset].layout;
-  }
-  pieces = data.map(d => ({
+// 动态加载 3 个内置档位的初始布局（来自 codes/layouts/*.json）
+// 任意文件失败仅影响该 key：loadedLayouts[key]=null 并 console.warn；其他独立成功
+let loadedLayouts = {};   // {small, battle, final} → layout 数组 或 null（回退）
+let layoutsReady = false; // false 时 initPieces 用 PRESETS 兜底
+function loadPresetLayouts() {
+  const tryOne = (key, url) => fetch(url).then(r => r.json()).then(j => {
+    const v = validateLoadedLayout(j.layout, key);
+    loadedLayouts[key] = v;
+    if (!v) console.warn("[layouts] " + key + " 校验失败，回落硬编码");
+  }).catch(e => { loadedLayouts[key] = null; console.warn("[layouts] " + key + " 加载失败", e); });
+  return Promise.all([
+    tryOne("small",  "codes/layouts/small.json"),
+    tryOne("battle", "codes/layouts/battle.json"),
+    tryOne("final",  "codes/layouts/final.json"),
+  ]).then(() => { layoutsReady = true; });
+}
+function enablePresetSelect() {
+  const sel = document.getElementById("preset");
+  if (sel) sel.disabled = false;
+}
+function clearLayoutHint() {
+  const hint = document.getElementById("hint");
+  if (hint && hint.textContent === "加载布局…") hint.textContent = "";
+}
+
+// 把布局元组数组装配为完整棋子对象数组（供 initPieces / importLayout 共用）
+function piecesFromLayout(data) {
+  return data.map(d => ({
     id: makeId(), side: d[0], type: d[1],
     col: d[2], row: d[3],
     state: d[1] === "king" ? "imprisoned_invincible" : "free",
@@ -900,6 +930,18 @@ function initPieces() {
     activelyUnlocked: false, // 主动解锁标记：禁止被动重新禁锢
     hoverT: 0,               // hover 缩放动画进度 0..1
   }));
+}
+
+// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
+function initPieces() {
+  nextId = 1;
+  let data;
+  if (currentPreset === "custom") {
+    data = customLayout || [];
+  } else {
+    data = (loadedLayouts[currentPreset]) || PRESETS[currentPreset].layout;
+  }
+  pieces = piecesFromLayout(data);
 }
 
 function pieceAt(c, r) {
@@ -929,11 +971,26 @@ function inPalace(side, col, row) {
  * 规则层
  * ========================================================= */
 const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+const KNIGHT_OFFSETS = [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+
+function knightReach(piece) {
+  const moves = [];
+  for (const [dc, dr] of KNIGHT_OFFSETS) {
+    const nc = piece.col + dc, nr = piece.row + dr;
+    if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+    const occ = pieceAt(nc, nr);
+    if (!occ) moves.push({ col: nc, row: nr, capture: false });
+    else if (occ.side !== piece.side && !(occ.type === "king" && !occ.hasMoved)) moves.push({ col: nc, row: nr, capture: true });
+    // 己方或无敌王：丢弃（不受阻挡、不吃无敌王）
+  }
+  return moves;
+}
 
 // 可达范围：路径不穿敌、吃敌后停；不限制目标是否无敌。用于禁锢覆盖统计。
 function reachableCells(piece) {
   const moves = [];
   if (piece.state === "imprisoned_invincible") return moves;
+  if (piece.type === "horse") return knightReach(piece);
   const maxStep = piece.state === "berserk" ? 18 : 2;
   for (const [dc, dr] of DIRS) {
     for (let s = 1; s <= maxStep; s++) {
@@ -1081,7 +1138,7 @@ function sideUnlocked(side) {
   }
   return false;
 }
-function soldiersOf(side) { return pieces.filter(p => p.side === side && p.type === "soldier").length; }
+function smallPieceCountOf(side) { return pieces.filter(p => p.side === side && (p.type === "soldier" || p.type === "horse")).length; }
 
 // 胜负判定（不含平局）
 function checkWinLoss() {
@@ -1089,8 +1146,8 @@ function checkWinLoss() {
   if (wBig === 0 && sideUnlocked("black")) return { winner: "black" };
   if (bBig === 0 && sideUnlocked("white")) return { winner: "white" };
   const wKing = kingOf("white"), bKing = kingOf("black");
-  if (wKing && wKing.state === "imprisoned_invincible" && soldiersOf("white") === 0) return { winner: "black" };
-  if (bKing && bKing.state === "imprisoned_invincible" && soldiersOf("black") === 0) return { winner: "white" };
+  if (wKing && wKing.state === "imprisoned_invincible" && smallPieceCountOf("white") === 0) return { winner: "black" };
+  if (bKing && bKing.state === "imprisoned_invincible" && smallPieceCountOf("black") === 0) return { winner: "white" };
   return null;
 }
 
@@ -1454,7 +1511,7 @@ function studyUndo() {
  * ========================================================= */
 const AI_M = 1000000;                    // 终局分值基数（远大于评估值域）
 const AI_TIMEOUT = { aiTimeout: true };  // 迭代加深超时哨兵
-const AI_VAL = { soldier: 100, clone: 350, king: 2000 }; // MVV-LVA 排序用子力值
+const AI_VAL = { soldier: 100, clone: 350, king: 2000, horse: 300 }; // MVV-LVA 排序用子力值
 let aiNodes = 0;                         // 本次搜索展开节点数（调试用）
 let aiHistory = null;                    // history 启发式表 [fromIdx*361+toIdx]：每次选着重置
 
@@ -1714,6 +1771,21 @@ function simGenMoves(sim, side) {
   for (const p of sim.pieces) {
     if (p.dead || p.side !== side) continue;
     if (p.state === "imprisoned_invincible") continue;
+    if (p.type === "horse") {
+      const fromIdx = p.row * 19 + p.col;
+      for (const [dc, dr] of KNIGHT_OFFSETS) {
+        const nc = p.col + dc, nr = p.row + dr;
+        if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+        const i = sim.occ[nr * 19 + nc];
+        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        const t = sim.pieces[i];
+        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (t.side === side) continue;            // 己方
+        if (t.type === "king" && !t.hasMoved) continue; // 无敌王：不可吃
+        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: true });
+      }
+      continue;
+    }
     const maxStep = p.state === "berserk" ? 18 : 2;
     const fromIdx = p.row * 19 + p.col;
     for (const [dc, dr] of DIRS) {
@@ -1754,7 +1826,7 @@ function simSortMoves(sim, moves, ply) {
 function aiCloneOption(sim, side) {
   if (sim.lostClone[side] || !sim.cloneUnlocked[side]) return 0;
   if (simBigCount(sim, side) >= 2) return 0;
-  for (const p of sim.pieces) if (!p.dead && p.side === side && p.type === "soldier") return 120;
+  for (const p of sim.pieces) if (!p.dead && p.side === side && p.type !== "king" && p.type !== "clone") return 120;
   return 0;
 }
 // 局面评估：返回 side 视角分值（值域远小于 AI_M）
@@ -1835,7 +1907,7 @@ let ZT1 = 0, ZT2 = 0;                                              // 回合方�
   for (let i = 0; i < 16; i++) { ZF1[i] = rnd(); ZF2[i] = rnd(); }
   ZT1 = rnd(); ZT2 = rnd();
 })();
-const Z_TYPE = { soldier: 0, clone: 1, king: 2 };
+const Z_TYPE = { soldier: 0, clone: 1, king: 2, horse: 3 };
 const Z_STATE = { imprisoned_invincible: 0, free: 1, berserk: 2 };
 const _HASH = { h1: 0, h2: 0 };
 // 全量哈希（O(P)，每节点一次；增量维护易错，性能已够）
@@ -2373,6 +2445,13 @@ function drawPieces() {
       ctx.restore();
     }
 
+    // 马细灰内环
+    if (p.type === "horse") {
+      ctx.strokeStyle = "rgba(170,170,170,0.55)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(x, y, r*0.66, 0, Math.PI*2); ctx.stroke();
+    }
+
     // 镜面高光：大软光斑 + 小亮点（光泽玻璃感）
     ctx.save();
     ctx.translate(x - r*0.3, y - r*0.38);
@@ -2399,7 +2478,9 @@ function drawPieces() {
     }
 
     // 文字
-    const label = isBig ? (isWhite ? "武" : "纣") : (isWhite ? "兵" : "卒");
+    const label = p.type === "horse" ? "马"
+                : isBig ? (isWhite ? "武" : "纣")
+                : (isWhite ? "兵" : "卒");
     ctx.fillStyle = isWhite ? "#2a1a08" : "#eee";
     ctx.font = (isBig ? "bold " : "") + Math.round((isBig ? 16 : 13) * (1 + HOVER_GROW * hv)) + "px sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -2753,6 +2834,9 @@ document.getElementById("setup-controls").addEventListener("click", (e) => {
   if (chip) setSetupTool(chip.dataset.tool);
 });
 document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
+document.getElementById("btn-setup-export").addEventListener("click", exportLayout);
+document.getElementById("btn-setup-import").addEventListener("click", () => document.getElementById("file-import-layout").click());
+document.getElementById("file-import-layout").addEventListener("change", importLayout);
 document.getElementById("btn-setup-exit").addEventListener("click", () => exitSetup(false));
 document.getElementById("btn-setup-start").addEventListener("click", startFromSetup);
 document.getElementById("btn-rules").addEventListener("click", () => {
@@ -2760,6 +2844,47 @@ document.getElementById("btn-rules").addEventListener("click", () => {
 });
 
 /* ----- 记谱 / 复盘 按钮 ----- */
+function exportLayout() {
+  const data = { game: "商周大战", preset: "custom", moves: [], layout: pieces.map(p => [p.side, p.type, p.col, p.row]) };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "商周大战布局.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+function importLayoutFromText(text) {
+  // 与 importLayout 共享逻辑；按钮事件用 FileReader 调它
+  try {
+    const data = JSON.parse(text);
+    const layout = (Array.isArray(data.layout) ? data.layout.map(normLayoutItem).filter(Boolean) : null);
+    if (!layout || layout.length === 0) {
+      document.getElementById("hint").textContent = "布局为空或格式不符。";
+      return;
+    }
+    if (!setupMode) {
+      document.getElementById("hint").textContent = "请先进摆子再导入布局。";
+      return;
+    }
+    if (!confirm("导入布局将覆盖当前摆子，是否继续？")) return;
+    pieces = piecesFromLayout(layout);
+    markSetupDirty();
+    render();
+    document.getElementById("hint").textContent = "已导入 " + pieces.length + " 个棋子。";
+  } catch (e) {
+    document.getElementById("hint").textContent = "布局文件解析失败：" + (e.message || e);
+  }
+}
+function importLayout(e) {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => importLayoutFromText(r.result);
+  r.readAsText(f);
+  e.target.value = "";
+}
 function exportRecord() {
   if (moveLog.length === 0) {
     document.getElementById("hint").textContent = "尚无棋谱可导出。";
@@ -2784,7 +2909,7 @@ function normLayoutItem(d) {
   else if (d && typeof d === "object") { side = d.side; type = d.type; col = d.col; row = d.row; }
   else return null;
   if (side !== "white" && side !== "black") return null;
-  if (type !== "king" && type !== "soldier") return null;
+  if (type !== "king" && type !== "soldier" && type !== "horse") return null;
   col = +col; row = +row;
   if (!Number.isFinite(col) || !Number.isFinite(row)) return null;
   return [side, type, col, row];
@@ -2894,7 +3019,7 @@ function setSetupTool(t) {
     : "已选「" + setupToolLabel(t) + "」，点击空格放置（同格点击可覆盖）。";
 }
 function setupToolLabel(t) {
-  return { white_king: "周武王", white_soldier: "周兵", black_king: "商纣王", black_soldier: "商卒", erase: "橡皮" }[t] || t;
+  return { white_king: "周武王", white_soldier: "周兵", white_horse: "周马", black_king: "商纣王", black_soldier: "商卒", black_horse: "商马", erase: "橡皮" }[t] || t;
 }
 function enterSetup() {
   aiToken++; // 作废已排队的 AI 思考
@@ -2953,19 +3078,35 @@ function clearSetup() {
   document.getElementById("hint").textContent = "已清空棋盘，请重新摆子。";
   render();
 }
+function validateLoadedLayout(layout, key) {
+  if (!Array.isArray(layout)) return null;
+  const items = layout.map(normLayoutItem).filter(Boolean);
+  if (items.length === 0) return null;
+  // 必须有双方各 1 king
+  const hasWK = items.some(p => p[0]==="white" && p[1]==="king");
+  const hasBK = items.some(p => p[0]==="black" && p[1]==="king");
+  if (!hasWK || !hasBK) return null;
+  // K10 对称
+  for (const [side, type, c, r] of items) {
+    const opp = side==="white" ? "black" : "white";
+    const found = items.find(p => p[0]===opp && p[1]===type && p[2]===18-c && p[3]===18-r);
+    if (!found) return null;
+  }
+  return items;
+}
 function validateSetup() {
   const c = setupPieceCounts();
   if (c.white_king !== 1) return "周方须恰好 1 名武王（当前 " + c.white_king + "）。";
   if (c.black_king !== 1) return "商方须恰好 1 名武王（当前 " + c.black_king + "）。";
-  if (c.white_soldier < 1) return "周方须至少 1 名兵。";
-  if (c.black_soldier < 1) return "商方须至少 1 名兵。";
+  if (smallPieceCountOf("white") < 1) return "周方须至少 1 枚小棋子（兵或马）。";
+  if (smallPieceCountOf("black") < 1) return "商方须至少 1 枚小棋子（兵或马）。";
   recomputeKingStates();
-  // 禁锢是正常开局态（武王无敌、士兵自由行棋）；仅当「王被禁锢 且 该方无兵」才是无解死局
+  // 禁锢是正常开局态（武王无敌、小棋子自由行棋）；仅当「王被禁锢 且 该方无小棋子」才是无解死局
   const wk = kingOf("white"), bk = kingOf("black");
-  if (wk && wk.state === "imprisoned_invincible" && c.white_soldier === 0)
-    return "周武王被禁锢且无兵可走，开局即死局。";
-  if (bk && bk.state === "imprisoned_invincible" && c.black_soldier === 0)
-    return "商纣王被禁锢且无兵可走，开局即死局。";
+  if (wk && wk.state === "imprisoned_invincible" && smallPieceCountOf("white") === 0)
+    return "周武王被禁锢且无小棋子可走，开局即死局。";
+  if (bk && bk.state === "imprisoned_invincible" && smallPieceCountOf("black") === 0)
+    return "商纣王被禁锢且无小棋子可走，开局即死局。";
   if (!hasAnyMove("white")) return "开局周方无合法行动，无法开下。";
   return null;
 }
@@ -3014,6 +3155,19 @@ currentSkin = loadSkin();
 fitCanvas(); // 先按当前 CSS 尺寸定好画布物理分辨率，applySkin 才能以正确尺寸建皮肤缓存
 applySkin(currentSkin); // 应用皮肤：写入面板 CSS 变量 + 整盘重绘
 renderScoresheet();
+
+// 启动加载初始布局（异步，不阻塞首屏）
+const presetSel = document.getElementById("preset");
+if (presetSel) {
+  presetSel.disabled = true;
+  const hintEl = document.getElementById("hint");
+  const oldHint = hintEl ? hintEl.textContent : "";
+  if (hintEl) hintEl.textContent = "加载布局…";
+  loadPresetLayouts().then(() => {
+    presetSel.disabled = false;
+    if (hintEl && hintEl.textContent === "加载布局…") hintEl.textContent = oldHint;
+  });
+}
 </script>
 </body>
 </html>
