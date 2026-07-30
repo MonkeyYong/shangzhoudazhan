@@ -1098,7 +1098,7 @@ function sideUnlocked(side) {
   }
   return false;
 }
-function soldiersOf(side) { return pieces.filter(p => p.side === side && p.type === "soldier").length; }
+function smallPieceCountOf(side) { return pieces.filter(p => p.side === side && (p.type === "soldier" || p.type === "horse")).length; }
 
 // 胜负判定（不含平局）
 function checkWinLoss() {
@@ -1106,8 +1106,8 @@ function checkWinLoss() {
   if (wBig === 0 && sideUnlocked("black")) return { winner: "black" };
   if (bBig === 0 && sideUnlocked("white")) return { winner: "white" };
   const wKing = kingOf("white"), bKing = kingOf("black");
-  if (wKing && wKing.state === "imprisoned_invincible" && soldiersOf("white") === 0) return { winner: "black" };
-  if (bKing && bKing.state === "imprisoned_invincible" && soldiersOf("black") === 0) return { winner: "white" };
+  if (wKing && wKing.state === "imprisoned_invincible" && smallPieceCountOf("white") === 0) return { winner: "black" };
+  if (bKing && bKing.state === "imprisoned_invincible" && smallPieceCountOf("black") === 0) return { winner: "white" };
   return null;
 }
 
@@ -1786,7 +1786,7 @@ function simSortMoves(sim, moves, ply) {
 function aiCloneOption(sim, side) {
   if (sim.lostClone[side] || !sim.cloneUnlocked[side]) return 0;
   if (simBigCount(sim, side) >= 2) return 0;
-  for (const p of sim.pieces) if (!p.dead && p.side === side && p.type === "soldier") return 120;
+  for (const p of sim.pieces) if (!p.dead && p.side === side && p.type !== "king" && p.type !== "clone") return 120;
   return 0;
 }
 // 局面评估：返回 side 视角分值（值域远小于 AI_M）
@@ -2998,15 +2998,15 @@ function validateSetup() {
   const c = setupPieceCounts();
   if (c.white_king !== 1) return "周方须恰好 1 名武王（当前 " + c.white_king + "）。";
   if (c.black_king !== 1) return "商方须恰好 1 名武王（当前 " + c.black_king + "）。";
-  if (c.white_soldier < 1) return "周方须至少 1 名兵。";
-  if (c.black_soldier < 1) return "商方须至少 1 名兵。";
+  if (smallPieceCountOf("white") < 1) return "周方须至少 1 枚小棋子（兵或马）。";
+  if (smallPieceCountOf("black") < 1) return "商方须至少 1 枚小棋子（兵或马）。";
   recomputeKingStates();
-  // 禁锢是正常开局态（武王无敌、士兵自由行棋）；仅当「王被禁锢 且 该方无兵」才是无解死局
+  // 禁锢是正常开局态（武王无敌、小棋子自由行棋）；仅当「王被禁锢 且 该方无小棋子」才是无解死局
   const wk = kingOf("white"), bk = kingOf("black");
-  if (wk && wk.state === "imprisoned_invincible" && c.white_soldier === 0)
-    return "周武王被禁锢且无兵可走，开局即死局。";
-  if (bk && bk.state === "imprisoned_invincible" && c.black_soldier === 0)
-    return "商纣王被禁锢且无兵可走，开局即死局。";
+  if (wk && wk.state === "imprisoned_invincible" && smallPieceCountOf("white") === 0)
+    return "周武王被禁锢且无小棋子可走，开局即死局。";
+  if (bk && bk.state === "imprisoned_invincible" && smallPieceCountOf("black") === 0)
+    return "商纣王被禁锢且无小棋子可走，开局即死局。";
   if (!hasAnyMove("white")) return "开局周方无合法行动，无法开下。";
   return null;
 }
