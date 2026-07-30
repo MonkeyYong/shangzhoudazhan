@@ -42,6 +42,7 @@ const sandbox = {
   alert() {}, setTimeout, clearTimeout, console,
   FileReader: function () {}, Blob: function () {},
   URL: { createObjectURL: () => "", revokeObjectURL() {} }, Event: function () {},
+  fetch: () => Promise.resolve({ json: () => Promise.resolve({ layout: [] }) }),
 };
 sandbox.window = sandbox;
 vm.createContext(sandbox);

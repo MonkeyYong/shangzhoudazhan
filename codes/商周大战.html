@@ -894,6 +894,31 @@ function syncCustomSub() {
   if (el) el.textContent = (customLayout && customLayout.length) ? customLayout.length + " 子" : "自由摆子";
 }
 
+// 动态加载 3 个内置档位的初始布局（来自 codes/layouts/*.json）
+// 任意文件失败仅影响该 key：loadedLayouts[key]=null 并 console.warn；其他独立成功
+let loadedLayouts = {};   // {small, battle, final} → layout 数组 或 null（回退）
+let layoutsReady = false; // false 时 initPieces 用 PRESETS 兜底
+function loadPresetLayouts() {
+  const tryOne = (key, url) => fetch(url).then(r => r.json()).then(j => {
+    const v = validateLoadedLayout(j.layout, key);
+    loadedLayouts[key] = v;
+    if (!v) console.warn("[layouts] " + key + " 校验失败，回落硬编码");
+  }).catch(e => { loadedLayouts[key] = null; console.warn("[layouts] " + key + " 加载失败", e); });
+  return Promise.all([
+    tryOne("small",  "codes/layouts/small.json"),
+    tryOne("battle", "codes/layouts/battle.json"),
+    tryOne("final",  "codes/layouts/final.json"),
+  ]).then(() => { layoutsReady = true; });
+}
+function enablePresetSelect() {
+  const sel = document.getElementById("preset");
+  if (sel) sel.disabled = false;
+}
+function clearLayoutHint() {
+  const hint = document.getElementById("hint");
+  if (hint && hint.textContent === "加载布局…") hint.textContent = "";
+}
+
 // 把布局元组数组装配为完整棋子对象数组（供 initPieces / importLayout 共用）
 function piecesFromLayout(data) {
   return data.map(d => ({
@@ -914,7 +939,7 @@ function initPieces() {
   if (currentPreset === "custom") {
     data = customLayout || [];
   } else {
-    data = PRESETS[currentPreset].layout;
+    data = (loadedLayouts[currentPreset]) || PRESETS[currentPreset].layout;
   }
   pieces = piecesFromLayout(data);
 }
@@ -3130,6 +3155,19 @@ currentSkin = loadSkin();
 fitCanvas(); // 先按当前 CSS 尺寸定好画布物理分辨率，applySkin 才能以正确尺寸建皮肤缓存
 applySkin(currentSkin); // 应用皮肤：写入面板 CSS 变量 + 整盘重绘
 renderScoresheet();
+
+// 启动加载初始布局（异步，不阻塞首屏）
+const presetSel = document.getElementById("preset");
+if (presetSel) {
+  presetSel.disabled = true;
+  const hintEl = document.getElementById("hint");
+  const oldHint = hintEl ? hintEl.textContent : "";
+  if (hintEl) hintEl.textContent = "加载布局…";
+  loadPresetLayouts().then(() => {
+    presetSel.disabled = false;
+    if (hintEl && hintEl.textContent === "加载布局…") hintEl.textContent = oldHint;
+  });
+}
 </script>
 </body>
 </html>

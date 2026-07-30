@@ -21,15 +21,30 @@ documentStub.createElement = (tag) => {
   return el;
 };
 
+// Task 11: mock-fetch 沙箱（从磁盘读 3 个真实 JSON）
+const mockFiles = {
+  "codes/layouts/small.json":  fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "small.json"), "utf8"),
+  "codes/layouts/battle.json": fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "battle.json"), "utf8"),
+  "codes/layouts/final.json":  fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "final.json"), "utf8"),
+};
+sandbox.fetch = (url) => Promise.resolve({ json: () => Promise.resolve(JSON.parse(mockFiles[url])) });
+
 const EXPORT = `
 ;globalThis.__V = {
   setPieces: (arr) => { pieces = arr; },
   setCustomLayout: (arr) => { customLayout = arr; },
   setSetupMode: (v) => { setupMode = v; },
   setSetupDirty: (v) => { setupDirty = v; },
+  setPreset: (v) => { currentPreset = v; },
   exportLayout: () => exportLayout(),
   validate: (layout, key) => validateLoadedLayout(layout, key),
   mk: (type, col, row, side="white") => ({id:1,side,type,col,row,state:type==="king"?"imprisoned_invincible":"free",isClone:false,hasMoved:false,activelyUnlocked:false,hoverT:0,dead:false}),
+  loadPresets: () => loadPresetLayouts(),
+  loadedLayouts: () => loadedLayouts,
+  ready: () => layoutsReady,
+  preset: () => currentPreset,
+  initPieces: () => initPieces(),
+  pieces: () => pieces,
 };
 `;
 
@@ -60,5 +75,24 @@ ok(V.validate(asymLayout,"x")===null, "破坏对称的布局被拒绝（返回 n
 ok(V.validate([],"x")===null, "空布局被拒绝");
 ok(V.validate([["white","dragon",0,0]],"x")===null, "未知 type 被过滤后为空→拒绝");
 
-console.log(fails===0?"\nALL GREEN":"\n"+fails+" FAILURE(S)");
-process.exit(fails===0?0:1);
+// === loadPresetLayouts + initPieces 接入（Task 11）===
+V.loadPresets();
+(async () => {
+  // 等待 Promise 链
+  await new Promise(r => setTimeout(r, 50));
+  ok(V.ready()===true, "loadPresetLayouts 完成后 layoutsReady=true");
+  ok(V.loadedLayouts().small && V.loadedLayouts().small.length===14, "loadedLayouts.small = 14 枚");
+  ok(V.loadedLayouts().battle && V.loadedLayouts().battle.length===22, "loadedLayouts.battle = 22 枚");
+  ok(V.loadedLayouts().final && V.loadedLayouts().final.length===34, "loadedLayouts.final = 34 枚");
+  // initPieces 用 loaded
+  V.setPreset("final");
+  V.initPieces();
+  ok(V.pieces().length===34, "initPieces 在 final 档使用 loadedLayouts（34 枚）");
+  // 回退：把 loadedLayouts 清掉某 key，应回落到 PRESETS
+  V.loadedLayouts().small = null;
+  V.setPreset("small");
+  V.initPieces();
+  ok(V.pieces().length===14, "loadedLayouts 缺失时回落到 PRESETS（small 14 枚）");
+  console.log(fails===0?"\nALL GREEN":"\n"+fails+" FAILURE(S)");
+  process.exit(fails===0?0:1);
+})();
