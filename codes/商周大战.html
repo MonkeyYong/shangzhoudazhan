@@ -197,7 +197,8 @@
   .sp-dot.ws { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
   .sp-dot.bk { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
   .sp-dot.bs { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
-  .setup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .setup-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .setup-actions > .setup-group { display: flex; flex-direction: column; gap: 6px; }
   #btn-setup-exit {
     background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
   }
@@ -415,12 +416,18 @@
           <div class="sp-chip" data-tool="black_horse"><span class="sp-dot bs"></span>商马</div>
         </div>
         <div class="setup-actions">
-          <div class="sp-chip erase" data-tool="erase">橡皮擦</div>
-          <button id="btn-setup-clear">清空</button>
-          <button id="btn-setup-exit">退出摆子 ✕</button>
-          <button id="btn-setup-start" class="btn-primary">校验并保存</button>
-          <button id="btn-setup-export">导出布局</button>
-          <button id="btn-setup-import">导入布局</button>
+          <div class="setup-group">
+            <button class="sp-chip erase" data-tool="erase">橡皮擦</button>
+            <button id="btn-setup-clear">清空</button>
+          </div>
+          <div class="setup-group">
+            <button id="btn-setup-export">导出布局</button>
+            <button id="btn-setup-import">导入布局</button>
+          </div>
+          <div class="setup-group">
+            <button id="btn-setup-start" class="btn-primary">校验并保存</button>
+            <button id="btn-setup-exit">退出摆子 ✕</button>
+          </div>
         </div>
         <input type="file" id="file-import-layout" accept=".json,application/json" style="display:none">
       </div>
