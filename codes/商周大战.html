@@ -1454,7 +1454,7 @@ function studyUndo() {
  * ========================================================= */
 const AI_M = 1000000;                    // 终局分值基数（远大于评估值域）
 const AI_TIMEOUT = { aiTimeout: true };  // 迭代加深超时哨兵
-const AI_VAL = { soldier: 100, clone: 350, king: 2000 }; // MVV-LVA 排序用子力值
+const AI_VAL = { soldier: 100, clone: 350, king: 2000, horse: 300 }; // MVV-LVA 排序用子力值
 let aiNodes = 0;                         // 本次搜索展开节点数（调试用）
 let aiHistory = null;                    // history 启发式表 [fromIdx*361+toIdx]：每次选着重置
 
@@ -1835,7 +1835,7 @@ let ZT1 = 0, ZT2 = 0;                                              // 回合方�
   for (let i = 0; i < 16; i++) { ZF1[i] = rnd(); ZF2[i] = rnd(); }
   ZT1 = rnd(); ZT2 = rnd();
 })();
-const Z_TYPE = { soldier: 0, clone: 1, king: 2 };
+const Z_TYPE = { soldier: 0, clone: 1, king: 2, horse: 3 };
 const Z_STATE = { imprisoned_invincible: 0, free: 1, berserk: 2 };
 const _HASH = { h1: 0, h2: 0 };
 // 全量哈希（O(P)，每节点一次；增量维护易错，性能已够）
@@ -2784,7 +2784,7 @@ function normLayoutItem(d) {
   else if (d && typeof d === "object") { side = d.side; type = d.type; col = d.col; row = d.row; }
   else return null;
   if (side !== "white" && side !== "black") return null;
-  if (type !== "king" && type !== "soldier") return null;
+  if (type !== "king" && type !== "soldier" && type !== "horse") return null;
   col = +col; row = +row;
   if (!Number.isFinite(col) || !Number.isFinite(row)) return null;
   return [side, type, col, row];
