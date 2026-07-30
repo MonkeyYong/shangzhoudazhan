@@ -419,7 +419,10 @@
           <button id="btn-setup-clear">清空</button>
           <button id="btn-setup-exit">退出摆子 ✕</button>
           <button id="btn-setup-start" class="btn-primary">校验并保存</button>
+          <button id="btn-setup-export">导出布局</button>
+          <button id="btn-setup-import">导入布局</button>
         </div>
+        <input type="file" id="file-import-layout" accept=".json,application/json" style="display:none">
       </div>
       <div id="replay-controls">
         <div id="replay-nav">
@@ -2799,6 +2802,9 @@ document.getElementById("setup-controls").addEventListener("click", (e) => {
   if (chip) setSetupTool(chip.dataset.tool);
 });
 document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
+document.getElementById("btn-setup-export").addEventListener("click", exportLayout);
+document.getElementById("btn-setup-import").addEventListener("click", () => document.getElementById("file-import-layout").click());
+document.getElementById("file-import-layout").addEventListener("change", importLayout);
 document.getElementById("btn-setup-exit").addEventListener("click", () => exitSetup(false));
 document.getElementById("btn-setup-start").addEventListener("click", startFromSetup);
 document.getElementById("btn-rules").addEventListener("click", () => {
@@ -2816,6 +2822,36 @@ function exportLayout() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
+}
+function importLayoutFromText(text) {
+  // 与 importLayout 共享逻辑；按钮事件用 FileReader 调它
+  try {
+    const data = JSON.parse(text);
+    const layout = (Array.isArray(data.layout) ? data.layout.map(normLayoutItem).filter(Boolean) : null);
+    if (!layout || layout.length === 0) {
+      document.getElementById("hint").textContent = "布局为空或格式不符。";
+      return;
+    }
+    if (!setupMode) {
+      document.getElementById("hint").textContent = "请先进摆子再导入布局。";
+      return;
+    }
+    if (!confirm("导入布局将覆盖当前摆子，是否继续？")) return;
+    pieces = piecesFromLayout(layout);
+    markSetupDirty();
+    render();
+    document.getElementById("hint").textContent = "已导入 " + pieces.length + " 个棋子。";
+  } catch (e) {
+    document.getElementById("hint").textContent = "布局文件解析失败：" + (e.message || e);
+  }
+}
+function importLayout(e) {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => importLayoutFromText(r.result);
+  r.readAsText(f);
+  e.target.value = "";
 }
 function exportRecord() {
   if (moveLog.length === 0) {
