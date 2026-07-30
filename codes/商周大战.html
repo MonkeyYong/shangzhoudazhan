@@ -411,6 +411,8 @@
           <div class="sp-chip" data-tool="white_soldier"><span class="sp-dot ws"></span>周兵</div>
           <div class="sp-chip" data-tool="black_king"><span class="sp-dot bk"></span>商纣王</div>
           <div class="sp-chip" data-tool="black_soldier"><span class="sp-dot bs"></span>商卒</div>
+          <div class="sp-chip" data-tool="white_horse"><span class="sp-dot ws"></span>周马</div>
+          <div class="sp-chip" data-tool="black_horse"><span class="sp-dot bs"></span>商马</div>
         </div>
         <div class="setup-actions">
           <div class="sp-chip erase" data-tool="erase">橡皮擦</div>
@@ -2403,6 +2405,13 @@ function drawPieces() {
       ctx.restore();
     }
 
+    // 马细灰内环
+    if (p.type === "horse") {
+      ctx.strokeStyle = "rgba(170,170,170,0.55)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(x, y, r*0.66, 0, Math.PI*2); ctx.stroke();
+    }
+
     // 镜面高光：大软光斑 + 小亮点（光泽玻璃感）
     ctx.save();
     ctx.translate(x - r*0.3, y - r*0.38);
@@ -2429,7 +2438,9 @@ function drawPieces() {
     }
 
     // 文字
-    const label = isBig ? (isWhite ? "武" : "纣") : (isWhite ? "兵" : "卒");
+    const label = p.type === "horse" ? "马"
+                : isBig ? (isWhite ? "武" : "纣")
+                : (isWhite ? "兵" : "卒");
     ctx.fillStyle = isWhite ? "#2a1a08" : "#eee";
     ctx.font = (isBig ? "bold " : "") + Math.round((isBig ? 16 : 13) * (1 + HOVER_GROW * hv)) + "px sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -2924,7 +2935,7 @@ function setSetupTool(t) {
     : "已选「" + setupToolLabel(t) + "」，点击空格放置（同格点击可覆盖）。";
 }
 function setupToolLabel(t) {
-  return { white_king: "周武王", white_soldier: "周兵", black_king: "商纣王", black_soldier: "商卒", erase: "橡皮" }[t] || t;
+  return { white_king: "周武王", white_soldier: "周兵", white_horse: "周马", black_king: "商纣王", black_soldier: "商卒", black_horse: "商马", erase: "橡皮" }[t] || t;
 }
 function enterSetup() {
   aiToken++; // 作废已排队的 AI 思考
