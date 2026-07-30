@@ -2806,6 +2806,17 @@ document.getElementById("btn-rules").addEventListener("click", () => {
 });
 
 /* ----- 记谱 / 复盘 按钮 ----- */
+function exportLayout() {
+  const data = { game: "商周大战", preset: "custom", moves: [], layout: pieces.map(p => [p.side, p.type, p.col, p.row]) };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "商周大战布局.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
 function exportRecord() {
   if (moveLog.length === 0) {
     document.getElementById("hint").textContent = "尚无棋谱可导出。";
