@@ -929,11 +929,26 @@ function inPalace(side, col, row) {
  * 规则层
  * ========================================================= */
 const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+const KNIGHT_OFFSETS = [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+
+function knightReach(piece) {
+  const moves = [];
+  for (const [dc, dr] of KNIGHT_OFFSETS) {
+    const nc = piece.col + dc, nr = piece.row + dr;
+    if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+    const occ = pieceAt(nc, nr);
+    if (!occ) moves.push({ col: nc, row: nr, capture: false });
+    else if (occ.side !== piece.side && !(occ.type === "king" && !occ.hasMoved)) moves.push({ col: nc, row: nr, capture: true });
+    // 己方或无敌王：丢弃（不受阻挡、不吃无敌王）
+  }
+  return moves;
+}
 
 // 可达范围：路径不穿敌、吃敌后停；不限制目标是否无敌。用于禁锢覆盖统计。
 function reachableCells(piece) {
   const moves = [];
   if (piece.state === "imprisoned_invincible") return moves;
+  if (piece.type === "horse") return knightReach(piece);
   const maxStep = piece.state === "berserk" ? 18 : 2;
   for (const [dc, dr] of DIRS) {
     for (let s = 1; s <= maxStep; s++) {
@@ -1714,6 +1729,21 @@ function simGenMoves(sim, side) {
   for (const p of sim.pieces) {
     if (p.dead || p.side !== side) continue;
     if (p.state === "imprisoned_invincible") continue;
+    if (p.type === "horse") {
+      const fromIdx = p.row * 19 + p.col;
+      for (const [dc, dr] of KNIGHT_OFFSETS) {
+        const nc = p.col + dc, nr = p.row + dr;
+        if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+        const i = sim.occ[nr * 19 + nc];
+        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        const t = sim.pieces[i];
+        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (t.side === side) continue;            // 己方
+        if (t.type === "king" && !t.hasMoved) continue; // 无敌王：不可吃
+        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: true });
+      }
+      continue;
+    }
     const maxStep = p.state === "berserk" ? 18 : 2;
     const fromIdx = p.row * 19 + p.col;
     for (const [dc, dr] of DIRS) {
