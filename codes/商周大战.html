@@ -327,7 +327,7 @@
           <label class="cfg-cap" for="preset">档位</label>
           <div class="cdd cdd-slim" id="preset-dd">
             <select id="preset" aria-hidden="true" tabindex="-1">
-              <option value="small">小局 (14子)</option>
+              <option value="small">小战 (14子)</option>
               <option value="battle" selected>大战 (22子)</option>
               <option value="final">决战 (34子)</option>
               <option value="custom">自定义</option>
@@ -336,7 +336,7 @@
               <span class="cdd-val"></span><span class="cdd-arrow"></span>
             </button>
             <div class="cdd-pop" role="listbox">
-              <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小局</span><span class="cd-sub">14 子</span></div>
+              <div class="cd-opt" data-val="small" role="option"><span class="cd-name">小战</span><span class="cd-sub">14 子</span></div>
               <div class="cd-opt" data-val="battle" role="option"><span class="cd-name">大战</span><span class="cd-sub">22 子</span></div>
               <div class="cd-opt" data-val="final" role="option"><span class="cd-name">决战</span><span class="cd-sub">34 子</span></div>
               <div class="cd-opt" data-val="custom" role="option"><span class="cd-name">自定义</span><span class="cd-sub">自由摆子</span></div>
@@ -471,7 +471,7 @@
     <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「难度」分菜鸟（休闲）、高手（稳健）、大师（深算）三档，双人模式下禁用，切换即时生效。</p>
     <p>AI 模式下悔棋一次连撤两手（AI 着 + 人类着）；若 AI 尚未应着，则只撤回人类上一步。撤销悔棋对称恢复。</p>
     <h3>开局档位</h3>
-    <p>小局 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
+    <p>小战 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
     <h3>记谱与复盘</h3>
     <p>对局自动记录坐标式棋谱（如「1. 白兵 K6→K8 ×黑卒」），显示于右面板下方，含首动/分身/暴走/终局标记。</p>
     <p>「导出棋谱」保存为 .json 文件；「导入棋谱」加载文件进入复盘模式，可用首步/前一步/后一步/末步逐步回看。「复盘本局」对当前棋谱复盘。</p>
@@ -501,7 +501,7 @@ const WHITE_PALACE = { c0: 7, c1: 11, r0: 0, r1: 3 };  // 白方(底部) H-M / 1
 const BLACK_PALACE = { c0: 7, c1: 11, r0: 15, r1: 18 }; // 黑方(顶部) H-M / 16-19
 
 /* =========================================================
- * 开局配置：3 个固定档位（小局/大战/决战），摆法见 docs 截图
+ * 开局配置：3 个固定档位（小战/大战/决战），摆法见 docs 截图
  * 仅列白方半局（武王+兵），黑方由中心对称 (18-c,18-r) 换色生成，保证 K10 对称
  * ========================================================= */
 const WHITE_HALF = {
@@ -536,7 +536,7 @@ function buildLayout(key) {
   return out;
 }
 const PRESETS = {
-  small:  { name: "小局", layout: buildLayout("small")  },
+  small:  { name: "小战", layout: buildLayout("small")  },
   battle: { name: "大战", layout: buildLayout("battle") },
   final:  { name: "决战", layout: buildLayout("final")  },
 };
