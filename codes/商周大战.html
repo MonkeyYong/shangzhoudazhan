@@ -3053,6 +3053,22 @@ function clearSetup() {
   document.getElementById("hint").textContent = "已清空棋盘，请重新摆子。";
   render();
 }
+function validateLoadedLayout(layout, key) {
+  if (!Array.isArray(layout)) return null;
+  const items = layout.map(normLayoutItem).filter(Boolean);
+  if (items.length === 0) return null;
+  // 必须有双方各 1 king
+  const hasWK = items.some(p => p[0]==="white" && p[1]==="king");
+  const hasBK = items.some(p => p[0]==="black" && p[1]==="king");
+  if (!hasWK || !hasBK) return null;
+  // K10 对称
+  for (const [side, type, c, r] of items) {
+    const opp = side==="white" ? "black" : "white";
+    const found = items.find(p => p[0]===opp && p[1]===type && p[2]===18-c && p[3]===18-r);
+    if (!found) return null;
+  }
+  return items;
+}
 function validateSetup() {
   const c = setupPieceCounts();
   if (c.white_king !== 1) return "周方须恰好 1 名武王（当前 " + c.white_king + "）。";

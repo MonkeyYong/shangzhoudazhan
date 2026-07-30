@@ -28,6 +28,7 @@ const EXPORT = `
   setSetupMode: (v) => { setupMode = v; },
   setSetupDirty: (v) => { setupDirty = v; },
   exportLayout: () => exportLayout(),
+  validate: (layout, key) => validateLoadedLayout(layout, key),
   mk: (type, col, row, side="white") => ({id:1,side,type,col,row,state:type==="king"?"imprisoned_invincible":"free",isClone:false,hasMoved:false,activelyUnlocked:false,hoverT:0,dead:false}),
 };
 `;
@@ -50,6 +51,14 @@ ok(exported.layout.find(x=>x[1]==="horse"), "exported.layout 保留 horse 类型
 
 // === importLayout 需 confirm 与 setupMode（这里仅确认函数存在；按钮行为手动验收）===
 ok(typeof V.exportLayout === "function", "exportLayout 是函数（importLayout 需 setupMode，由手动验收）");
+
+// === validateLoadedLayout（Task 10）===
+const symLayout = [["white","king",9,18],["black","king",9,0],["white","soldier",5,5],["black","soldier",13,13]];
+const asymLayout = [["white","king",9,18],["black","king",9,0],["white","soldier",5,5],["black","soldier",5,5]];
+ok(symLayout && symLayout.length===4 && V.validate(symLayout,"x") && V.validate(symLayout,"x").length===4, "对称布局通过 validateLoadedLayout");
+ok(V.validate(asymLayout,"x")===null, "破坏对称的布局被拒绝（返回 null）");
+ok(V.validate([],"x")===null, "空布局被拒绝");
+ok(V.validate([["white","dragon",0,0]],"x")===null, "未知 type 被过滤后为空→拒绝");
 
 console.log(fails===0?"\nALL GREEN":"\n"+fails+" FAILURE(S)");
 process.exit(fails===0?0:1);
