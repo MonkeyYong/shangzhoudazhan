@@ -884,6 +884,19 @@ function syncCustomSub() {
   if (el) el.textContent = (customLayout && customLayout.length) ? customLayout.length + " 子" : "自由摆子";
 }
 
+// 把布局元组数组装配为完整棋子对象数组（供 initPieces / importLayout 共用）
+function piecesFromLayout(data) {
+  return data.map(d => ({
+    id: makeId(), side: d[0], type: d[1],
+    col: d[2], row: d[3],
+    state: d[1] === "king" ? "imprisoned_invincible" : "free",
+    isClone: false,
+    hasMoved: false,         // 仅对 king 有意义：首次移动后为 true（失去无敌、不可再禁锢）
+    activelyUnlocked: false, // 主动解锁标记：禁止被动重新禁锢
+    hoverT: 0,               // hover 缩放动画进度 0..1
+  }));
+}
+
 // 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
 function initPieces() {
   nextId = 1;
@@ -893,15 +906,7 @@ function initPieces() {
   } else {
     data = PRESETS[currentPreset].layout;
   }
-  pieces = data.map(d => ({
-    id: makeId(), side: d[0], type: d[1],
-    col: d[2], row: d[3],
-    state: d[1] === "king" ? "imprisoned_invincible" : "free",
-    isClone: false,
-    hasMoved: false,         // 仅对 king 有意义：首次移动后为 true（失去无敌、不可再禁锢）
-    activelyUnlocked: false, // 主动解锁标记：禁止被动重新禁锢
-    hoverT: 0,               // hover 缩放动画进度 0..1
-  }));
+  pieces = piecesFromLayout(data);
 }
 
 function pieceAt(c, r) {
