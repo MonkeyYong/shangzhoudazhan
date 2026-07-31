@@ -874,7 +874,7 @@ function makeId() { return nextId++; }
 let loadedLayouts = {};   // {small, battle, final} → layout 数组 或 null（回退）
 let layoutsReady = false; // false 时 initPieces 用 PRESETS 兜底
 function loadPresetLayouts() {
-  const tryOne = (key, url) => fetch(url).then(r => r.json()).then(j => {
+  const tryOne = (key, url) => fetch(url + "?v=" + Date.now()).then(r => r.json()).then(j => {
     const v = validateLoadedLayout(j.layout, key);
     loadedLayouts[key] = v;
     if (!v) console.warn("[layouts] " + key + " 校验失败，回落硬编码");
