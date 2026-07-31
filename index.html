@@ -497,7 +497,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
     <h3>移动</h3>
     <p>兵/卒：横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。武王/分身：每回合仅可走 1 格（削弱逃跑）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
     <h3>禁锢与解锁</h3>
-    <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。</p>
+    <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。覆盖按各棋子走法判定：兵/卒按 1-2 格滑行，马按日字步，武王/分身按 1 格（暴走走射线）。</p>
     <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
     <p>主动解锁：己方任意棋子移至武王行动范围（即邻接 1 格）即解除禁锢。</p>
     <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
@@ -1002,13 +1002,13 @@ function knightReach(piece) {
     if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
     const occ = pieceAt(nc, nr);
     if (!occ) moves.push({ col: nc, row: nr, capture: false });
-    else if (occ.side !== piece.side && !(occ.type === "king" && !occ.hasMoved)) moves.push({ col: nc, row: nr, capture: true });
-    // 己方或无敌王：丢弃（不受阻挡、不吃无敌王）
+    else if (occ.side !== piece.side) moves.push({ col: nc, row: nr, capture: true });
+    // 己方：丢弃；敌方（含无敌王）：记录为 capture move（无敌王不可被吃的语义下放到 legalMoves 过滤）
   }
   return moves;
 }
 
-// 可达范围：路径不穿敌、吃敌后停；不限制目标是否无敌。用于禁锢覆盖统计。
+// 可达范围：路径不穿敌、吃敌后停。包含目标为无敌王的 capture move（用于禁锢覆盖统计）。
 function reachableCells(piece) {
   const moves = [];
   if (piece.state === "imprisoned_invincible") return moves;
@@ -1035,6 +1035,7 @@ function reachableCells(piece) {
 }
 
 // 合法移动目标：在可达范围基础上，过滤掉无敌武王（hasMoved=false 的 king 不可被吃）。
+//   注："无敌王不可被吃"只过滤这一层——禁锢覆盖统计（isImprisoned）用 reachableCells，仍把无敌王当作可达目标来算覆盖。
 function legalMoves(piece) {
   return reachableCells(piece).filter(m => {
     if (!m.capture) return true;
@@ -1602,6 +1603,12 @@ function simInTheoryRange(king, c, r) {
 // 是否覆盖指定格（零分配、命中即停；用于禁锢统计与评估）
 function simCanAttack(sim, piece, tc, tr) {
   if (piece.state === "imprisoned_invincible") return false;
+  if (piece.type === "horse") { // 马按日字步覆盖（与 reachableCells→knightReach 一致，不可当滑行棋子）
+    for (const [dc, dr] of KNIGHT_OFFSETS) {
+      if (piece.col + dc === tc && piece.row + dr === tr) return true;
+    }
+    return false;
+  }
   const isRoyal = piece.type === "king" || piece.type === "clone";
   const maxStep = piece.state === "berserk" ? 18 : (isRoyal ? 1 : 2);
   for (const [dc, dr] of DIRS) {

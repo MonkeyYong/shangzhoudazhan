@@ -61,7 +61,7 @@ const cap = V.reach(V.mk("horse",9,9)).find(m=>m.col===11&&m.row===10);
 ok(!!cap && cap.capture===true, "马可吃敌方");
 
 V.setPieces([V.mk("horse",9,9), V.mk("king",11,10,"black")]);
-ok(!V.reach(V.mk("horse",9,9)).find(m=>m.col===11&&m.row===10), "马不吃未移动的敌方 king");
+ok(!V.legal(V.mk("horse",9,9)).find(m=>m.col===11&&m.row===10), "马不吃未移动的敌方 king (legal 过滤)");
 
 V.setPieces([V.mk("horse",0,0)]);
 const r5 = V.reach(V.mk("horse",0,0));
