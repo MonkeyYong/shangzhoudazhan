@@ -2867,6 +2867,7 @@ function exportRecord() {
     return;
   }
   const data = { game: "商周大战", preset: currentPreset, moves: moveLog };
+  if (currentPreset === "custom" && Array.isArray(loadedLayouts["custom"])) data.layout = loadedLayouts["custom"];
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -2905,7 +2906,7 @@ function importRecord(e) {
         document.getElementById("hint").textContent = "该自定义棋谱未含初始布局，无法还原复盘。";
         return;
       }
-      if (isCustom) currentPreset = "custom";
+      if (isCustom) { loadedLayouts["custom"] = layout; currentPreset = "custom"; }
       const preset = isCustom ? "custom" : (PRESETS[data.preset] ? data.preset : "battle");
       const moves = data.moves.map(m => ({
         step: m.step, side: m.side, piece: m.piece,
@@ -3091,6 +3092,7 @@ function startFromSetup() {
   // 仅当本次有改动、或本就来自自定义档时，才记为自定义；否则保留原档、不覆盖已存自定义
   const becameCustom = setupDirty || setupEntryPreset === "custom";
   if (becameCustom) {
+    loadedLayouts["custom"] = pieces.map(p => [p.side, p.type, p.col, p.row]);
     currentPreset = "custom";
     document.getElementById("preset").value = "custom";
     syncPresetDropdown();
