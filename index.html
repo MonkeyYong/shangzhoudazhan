@@ -895,7 +895,7 @@ let aiBusy = false;       // AI 思考/落子中（防重入、禁人类交互�
 const AI_LEVELS = {
   rookie:   { depth: 1, topN: 4, label: "rookie" },
   advanced: { depth: 4, timeLimitMs: 2500, label: "advanced" },
-  master:   { depth: 5, timeLimitMs: 4500, label: "master" },
+  master:   { depth: 10, timeLimitMs: 8000, label: "master" },
 };
 
 let nextId = 1;
@@ -1758,7 +1758,22 @@ function simHasAnyMove(sim, side) {
   for (const p of sim.pieces) {
     if (p.dead || p.side !== side) continue;
     if (p.state === "imprisoned_invincible") continue;
-    const maxStep = p.state === "berserk" ? 18 : 2;
+    if (p.type === "horse") { // 马按日字步（与 reachableCells→knightReach 一致，不可当滑行棋子）
+      for (const [dc, dr] of KNIGHT_OFFSETS) {
+        const nc = p.col + dc, nr = p.row + dr;
+        if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+        const i = sim.occ[nr * 19 + nc];
+        if (i < 0) return true;
+        const t = sim.pieces[i];
+        if (t.dead) return true;
+        if (t.side === side) continue;            // 己方
+        if (t.type === "king" && !t.hasMoved) continue; // 无敌王：不可吃
+        return true; // 可吃敌
+      }
+      continue;
+    }
+    const isRoyal = p.type === "king" || p.type === "clone";
+    const maxStep = p.state === "berserk" ? 18 : (isRoyal ? 1 : 2);
     for (const [dc, dr] of DIRS) {
       for (let s = 1; s <= maxStep; s++) {
         const nc = p.col + dc * s, nr = p.row + dr * s;
@@ -1819,7 +1834,8 @@ function simGenMoves(sim, side) {
       }
       continue;
     }
-    const maxStep = p.state === "berserk" ? 18 : 2;
+    const isRoyal = p.type === "king" || p.type === "clone";
+    const maxStep = p.state === "berserk" ? 18 : (isRoyal ? 1 : 2);
     const fromIdx = p.row * 19 + p.col;
     for (const [dc, dr] of DIRS) {
       for (let s = 1; s <= maxStep; s++) {
@@ -2785,6 +2801,7 @@ function aiPlayMove(mv) {
     announce(r.terminal);
     return;
   }
+  document.getElementById("hint").textContent = (turn === "white" ? "白方" : "黑方") + "回合，请点击己方棋子。";
   render(); renderScoresheet();
 }
 
