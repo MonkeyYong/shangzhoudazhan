@@ -1,13 +1,13 @@
 @echo off
-rem 构建发行版 index.html：把 codes/layouts/*.json 嵌入 HTML，消除 file:// 协议下 fetch 被拦截问题
-rem 运行方式：双击 sync-index.bat 或在终端执行
-rem 源文件 = codes/商周大战.html，发行版 = index.html
+rem 把 codes/layouts/*.json 硬编码进 codes/商周大战.html 源码
+rem 适用于 file://（双击 HTML）和 HTTP 两种使用方式
+rem 源文件 = codes/商周大战.html，发行副本 = index.html（同步）
 setlocal
 set "ROOT=%~dp0"
-node "%ROOT%embed-layouts.cjs"
+node "%ROOT%update-layouts.cjs"
 if %ERRORLEVEL% neq 0 (
-  echo [sync] ERROR: embed-layouts.cjs failed
+  echo [sync] ERROR: update-layouts.cjs failed
   exit /b 1
 )
-echo [sync] Done — open index.html in browser
+echo [sync] Done - open index.html in browser
 endlocal

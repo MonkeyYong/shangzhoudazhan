@@ -1,6 +1,8 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const html = fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "商周大战.html"), "utf8");
-const js = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1])
+  .sort((a, b) => b.length - a.length)[0];
 
 function gfxProxyFn(){}
 const gfx = new Proxy(gfxProxyFn,{get:(t,k)=>(k===Symbol.toPrimitive?()=>"":gfx),apply:()=>gfx});
@@ -82,14 +84,20 @@ V.loadPresets();
   // 等待 Promise 链
   await new Promise(r => setTimeout(r, 50));
   ok(V.ready()===true, "loadPresetLayouts 完成后 layoutsReady=true");
-  ok(V.loadedLayouts().small && V.loadedLayouts().small.length===14, "loadedLayouts.small = 14 枚");
-  ok(V.loadedLayouts().battle && V.loadedLayouts().battle.length===22, "loadedLayouts.battle = 22 枚");
-  ok(V.loadedLayouts().final && V.loadedLayouts().final.length===34, "loadedLayouts.final = 34 枚");
+  // layout 数量从 disk 实际读（verify 不硬编码，将来同步修改 layouts 后仍正确）
+  const expectedCounts = {
+    small:  JSON.parse(mockFiles["codes/layouts/small.json"]).layout.length,
+    battle: JSON.parse(mockFiles["codes/layouts/battle.json"]).layout.length,
+    final:  JSON.parse(mockFiles["codes/layouts/final.json"]).layout.length,
+  };
+  ok(V.loadedLayouts().small && V.loadedLayouts().small.length===expectedCounts.small, "loadedLayouts.small = " + expectedCounts.small + " 枚");
+  ok(V.loadedLayouts().battle && V.loadedLayouts().battle.length===expectedCounts.battle, "loadedLayouts.battle = " + expectedCounts.battle + " 枚");
+  ok(V.loadedLayouts().final && V.loadedLayouts().final.length===expectedCounts.final, "loadedLayouts.final = " + expectedCounts.final + " 枚");
   // initPieces 用 loaded
   V.setPreset("final");
   V.initPieces();
-  ok(V.pieces().length===34, "initPieces 在 final 档使用 loadedLayouts（34 枚）");
-  // 回退：把 loadedLayouts 清掉某 key，应回落到 PRESETS
+  ok(V.pieces().length===expectedCounts.final, "initPieces 在 final 档使用 loadedLayouts（" + expectedCounts.final + " 枚）");
+  // 回退：把 loadedLayouts 清掉某 key，应回落到 PRESETS（PRESETS 是固定 14 枚）
   V.loadedLayouts().small = null;
   V.setPreset("small");
   V.initPieces();

@@ -1,7 +1,9 @@
 // 校验马兵种：类型系统 + 走法 + 机制
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const html = fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "商周大战.html"), "utf8");
-const js = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1])
+  .sort((a, b) => b.length - a.length)[0];
 
 function gfxProxyFn(){}
 const gfx = new Proxy(gfxProxyFn,{get:(t,k)=>(k===Symbol.toPrimitive?()=>"":gfx),apply:()=>gfx});

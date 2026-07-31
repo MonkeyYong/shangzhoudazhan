@@ -7,7 +7,11 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const html = fs.readFileSync(
   path.join("D:", "Codes", "Projects", "商周大战", "codes", "商周大战.html"), "utf8");
-const js = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// 源 HTML 有多个 <script>（update-layouts.cjs 注入的默认布局块 + 游戏主脚本）
+// 取最长的那个（即游戏主脚本），按长度排序，选 body 最长
+const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1])
+  .sort((a, b) => b.length - a.length)[0];
 
 // --- DOM stub（沿用 verify-layout.js 模板） ---
 function gfxProxyFn(){}

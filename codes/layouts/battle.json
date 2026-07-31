@@ -46,36 +46,6 @@
       2
     ],
     [
-      "black",
-      "soldier",
-      9,
-      16
-    ],
-    [
-      "white",
-      "soldier",
-      7,
-      3
-    ],
-    [
-      "black",
-      "soldier",
-      11,
-      15
-    ],
-    [
-      "white",
-      "soldier",
-      11,
-      3
-    ],
-    [
-      "black",
-      "soldier",
-      7,
-      15
-    ],
-    [
       "white",
       "soldier",
       5,
@@ -85,18 +55,6 @@
       "black",
       "soldier",
       13,
-      13
-    ],
-    [
-      "white",
-      "soldier",
-      9,
-      5
-    ],
-    [
-      "black",
-      "soldier",
-      9,
       13
     ],
     [
@@ -133,6 +91,60 @@
       "black",
       "soldier",
       7,
+      11
+    ],
+    [
+      "white",
+      "horse",
+      11,
+      3
+    ],
+    [
+      "white",
+      "horse",
+      7,
+      3
+    ],
+    [
+      "white",
+      "horse",
+      9,
+      5
+    ],
+    [
+      "black",
+      "horse",
+      7,
+      15
+    ],
+    [
+      "black",
+      "horse",
+      11,
+      15
+    ],
+    [
+      "black",
+      "horse",
+      9,
+      13
+    ],
+    [
+      "black",
+      "soldier",
+      9,
+      16
+    ],
+    [
+      "white",
+      "horse",
+      9,
+      7
+    ],
+    [
+      "black",
+      "horse",
+      9,
       11
     ]
   ]

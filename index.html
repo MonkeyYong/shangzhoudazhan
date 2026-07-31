@@ -287,6 +287,11 @@
     #rules { width: auto; height: auto; max-height: 70vh; }
   }
 </style>
+<script>
+/* 默认布局（从 codes/layouts/*.json 嵌入）；可被游戏内"摆子"模式修改并保存为 JSON。 */
+window.__DEFAULT_LAYOUTS__ = {"small":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",6,4],["black","soldier",12,14],["white","soldier",12,4],["black","soldier",6,14],["white","horse",9,4],["white","horse",8,2],["white","horse",10,2],["black","horse",10,16],["black","horse",8,16],["black","horse",9,14],["black","soldier",8,12],["black","soldier",10,12],["white","soldier",8,6],["white","soldier",10,6]],"battle":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",9,2],["white","soldier",5,5],["black","soldier",13,13],["white","soldier",13,5],["black","soldier",5,13],["white","soldier",7,7],["black","soldier",11,11],["white","soldier",11,7],["black","soldier",7,11],["white","horse",11,3],["white","horse",7,3],["white","horse",9,5],["black","horse",7,15],["black","horse",11,15],["black","horse",9,13],["black","soldier",9,16],["white","horse",9,7],["black","horse",9,11]],"final":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["black","soldier",7,18],["white","soldier",9,2],["black","soldier",9,16],["white","soldier",11,0],["white","soldier",17,6],["white","soldier",13,6],["white","soldier",9,6],["white","soldier",5,6],["white","soldier",1,6],["white","horse",15,4],["white","horse",11,4],["white","horse",13,2],["white","horse",7,4],["white","horse",5,2],["white","horse",3,4],["black","soldier",17,12],["black","soldier",13,12],["black","soldier",9,12],["black","soldier",5,12],["black","soldier",1,12],["black","horse",13,16],["black","horse",5,16],["black","horse",3,14],["black","horse",7,14],["black","horse",11,14],["black","horse",15,14],["black","horse",7,10],["black","horse",3,10],["black","horse",11,10],["black","horse",15,10],["white","horse",3,8],["white","horse",7,8],["white","horse",11,8],["white","horse",15,8]],"custom":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",9,2],["white","soldier",5,5],["black","soldier",13,13],["white","soldier",13,5],["black","soldier",5,13],["white","soldier",7,7],["black","soldier",11,11],["white","soldier",11,7],["black","soldier",7,11],["white","horse",11,3],["white","horse",7,3],["white","horse",9,5],["black","horse",7,15],["black","horse",11,15],["black","horse",9,13],["black","soldier",9,16],["white","horse",9,7],["black","horse",9,11]]};
+window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T03:21:17.404Z";
+</script>
 </head>
 <body>
 <!-- ===================== 布局 ===================== -->
@@ -491,7 +496,6 @@
   </aside>
 </div>
 
-<script>window.__EMBEDDED_LAYOUTS__ = {"small":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",9,2],["black","soldier",9,16],["white","soldier",6,4],["black","soldier",12,14],["white","soldier",12,4],["black","soldier",6,14],["white","soldier",9,6],["black","soldier",9,12]],"battle":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",9,2],["white","soldier",5,5],["black","soldier",13,13],["white","soldier",13,5],["black","soldier",5,13],["white","soldier",7,7],["black","soldier",11,11],["white","soldier",11,7],["black","soldier",7,11],["white","horse",11,3],["white","horse",7,3],["white","horse",9,5],["black","horse",7,15],["black","horse",11,15],["black","horse",9,13],["black","soldier",9,16]],"final":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",5,1],["black","soldier",13,17],["white","soldier",13,1],["black","soldier",5,17],["white","soldier",9,2],["black","soldier",9,16],["white","soldier",3,3],["black","soldier",15,15],["white","soldier",7,3],["black","soldier",11,15],["white","soldier",11,3],["black","soldier",7,15],["white","soldier",15,3],["black","soldier",3,15],["white","soldier",5,5],["black","soldier",13,13],["white","soldier",9,5],["black","soldier",9,13],["white","soldier",13,5],["black","soldier",5,13],["white","soldier",3,7],["black","soldier",15,11],["white","soldier",7,7],["black","soldier",11,11],["white","soldier",11,7],["black","soldier",7,11],["white","soldier",15,7],["black","soldier",3,11]],"custom":[["white","king",9,18],["black","king",9,0],["white","soldier",9,6],["black","soldier",9,12]]};</script>
 <script>
 "use strict";
 /* =========================================================
@@ -876,24 +880,23 @@ function makeId() { return nextId++; }
 let loadedLayouts = {};   // {small, battle, final, custom} → layout 数组 或 null（回退）
 let layoutsReady = false; // false 时 initPieces 用 PRESETS 兜底
 function loadPresetLayouts() {
-  // file:// 协议：使用 sync-index.bat 运行时嵌入的布局数据，不走 fetch
-  if (window.__EMBEDDED_LAYOUTS__) {
-    for (const key of ["small", "battle", "final", "custom"]) {
-      const raw = window.__EMBEDDED_LAYOUTS__[key];
-      if (raw) {
-        const v = validateLoadedLayout(raw, key);
-        loadedLayouts[key] = v;
-        if (!v) console.warn("[layouts] " + key + " 校验失败");
-      }
-    }
+  // 优先级 1：HTML 源码中的硬编码默认布局（codes/商周大战.html 通过 update-layouts.cjs 注入）
+  // 优先级 2：fetch codes/layouts/*.json（HTTP 服务器模式下仍可用，每次带 ?v= 防缓存）
+  // 优先级 3：该档回退 null，由 initPieces 走 PRESETS 兜底
+  const fromSource = window.__DEFAULT_LAYOUTS__;
+  const tryApply = (key, raw) => {
+    if (!raw) return;
+    const v = validateLoadedLayout(raw, key);
+    loadedLayouts[key] = v;
+    if (!v) console.warn("[layouts] " + key + " 校验失败");
+  };
+  if (fromSource) {
+    for (const key of ["small", "battle", "final", "custom"]) tryApply(key, fromSource[key]);
     layoutsReady = true;
     return Promise.resolve();
   }
-  // HTTP 服务器模式：fetch 4 个 JSON 文件，失败时该 key 回退 null
   const tryOne = (key, url) => fetch(url + "?v=" + Date.now()).then(r => r.json()).then(j => {
-    const v = validateLoadedLayout(j.layout, key);
-    loadedLayouts[key] = v;
-    if (!v) console.warn("[layouts] " + key + " 校验失败，回落硬编码");
+    tryApply(key, j.layout);
   }).catch(e => { loadedLayouts[key] = null; console.warn("[layouts] " + key + " 加载失败", e); });
   return Promise.all([
     tryOne("small",  "codes/layouts/small.json"),

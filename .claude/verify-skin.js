@@ -4,7 +4,9 @@ const path = require("path");
 const vm = require("vm");
 
 const html = fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "商周大战.html"), "utf8");
-const js = html.match(/<script>([\s\S]*)<\/script>/)[1];
+const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1])
+  .sort((a, b) => b.length - a.length)[0];
 
 function gfxProxyFn() {}
 const gfx = new Proxy(gfxProxyFn, {
