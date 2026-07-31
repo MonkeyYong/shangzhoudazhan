@@ -3006,7 +3006,7 @@ function enterSetup() {
   for (const p of pieces) p.hoverT = 0; // 进入摆子清零悬停缩放，避免退出后残留
   setupMode = true;
   selected = null; legalMap.clear();
-  // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义，等首次改动棋子再切（markSetupDirty）
+  // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义
   setupTool = "white_soldier";
   document.getElementById("hint").textContent = "摆子模式：在当前档位上增删改棋子；点「校验并保存」会下载 codes/layouts/{档位}.json，由你覆盖原文件后刷新页面即可。「退出摆子」无改动直接退出、有改动撤销并返回原档。";
   render();
