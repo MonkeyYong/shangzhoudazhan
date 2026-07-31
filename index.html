@@ -846,7 +846,6 @@ let studyMode = false;         // 研究模式：在复盘当前局面上继续�
 let studyMoves = [];           // 研究着法（附在复盘基线之后）
 let setupMode = false;         // 摆子模式：编辑自定义局面，禁用行棋
 let setupTool = "white_soldier"; // 当前摆子工具：white_king|white_soldier|black_king|black_soldier|erase
-let customLayout = null;       // 自定义局面 [{side,type,col,row}]，null=尚无
 let setupSnapshot = null;      // 进入摆子前的对局快照，供退出/取消还原
 let setupEntryPreset = null;   // 进入摆子时的档位，供「退出摆子」有改动时切回
 let setupDirty = false;        // 本次摆子是否改动过棋子（决定是否记为自定义 / 退出是否还原）
@@ -870,30 +869,6 @@ const AI_LEVELS = {
 let nextId = 1;
 function makeId() { return nextId++; }
 
-// 自定义局面 localStorage 存取
-const CUSTOM_LAYOUT_KEY = "szdz_custom_layout_v1";
-function loadCustomLayout() {
-  try {
-    const raw = localStorage.getItem(CUSTOM_LAYOUT_KEY);
-    if (!raw) return null;
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return null;
-    return arr.filter(d => Array.isArray(d) && d.length === 4
-      && (d[0] === "white" || d[0] === "black") && (d[1] === "king" || d[1] === "soldier"));
-  } catch (e) { return null; }
-}
-function saveCustomLayout() {
-  try {
-    const data = pieces.map(p => [p.side, p.type, p.col, p.row]);
-    localStorage.setItem(CUSTOM_LAYOUT_KEY, JSON.stringify(data));
-  } catch (e) { /* 隐私模式等写失败时静默忽略 */ }
-}
-// 「自定义」选项副标签同步：已存档显示子数（与内置档位一致），未创建显示「自由摆子」
-function syncCustomSub() {
-  const el = document.querySelector('#preset-dd .cd-opt[data-val="custom"] .cd-sub');
-  if (el) el.textContent = (customLayout && customLayout.length) ? customLayout.length + " 子" : "自由摆子";
-}
-
 // 动态加载 3 个内置档位的初始布局（来自 codes/layouts/*.json）
 // 任意文件失败仅影响该 key：loadedLayouts[key]=null 并 console.warn；其他独立成功
 let loadedLayouts = {};   // {small, battle, final} → layout 数组 或 null（回退）
@@ -908,6 +883,7 @@ function loadPresetLayouts() {
     tryOne("small",  "codes/layouts/small.json"),
     tryOne("battle", "codes/layouts/battle.json"),
     tryOne("final",  "codes/layouts/final.json"),
+    tryOne("custom", "codes/layouts/custom.json"),
   ]).then(() => { layoutsReady = true; });
 }
 function enablePresetSelect() {
@@ -932,12 +908,12 @@ function piecesFromLayout(data) {
   }));
 }
 
-// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
+// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 走 loadedLayouts["custom"]）
 function initPieces() {
   nextId = 1;
   let data;
   if (currentPreset === "custom") {
-    data = customLayout || [];
+    data = loadedLayouts["custom"] || [];
   } else {
     data = (loadedLayouts[currentPreset]) || PRESETS[currentPreset].layout;
   }
@@ -2891,7 +2867,7 @@ function exportRecord() {
     return;
   }
   const data = { game: "商周大战", preset: currentPreset, moves: moveLog };
-  if (currentPreset === "custom" && Array.isArray(customLayout)) data.layout = customLayout;
+  if (currentPreset === "custom" && Array.isArray(loadedLayouts["custom"])) data.layout = loadedLayouts["custom"];
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -2930,7 +2906,7 @@ function importRecord(e) {
         document.getElementById("hint").textContent = "该自定义棋谱未含初始布局，无法还原复盘。";
         return;
       }
-      if (isCustom) { customLayout = layout; currentPreset = "custom"; syncCustomSub(); }
+      if (isCustom) { loadedLayouts["custom"] = layout; currentPreset = "custom"; }
       const preset = isCustom ? "custom" : (PRESETS[data.preset] ? data.preset : "battle");
       const moves = data.moves.map(m => ({
         step: m.step, side: m.side, piece: m.piece,
@@ -3032,19 +3008,14 @@ function enterSetup() {
   selected = null; legalMap.clear();
   // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义，等首次改动棋子再切（markSetupDirty）
   setupTool = "white_soldier";
-  document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；改动后档位记为「自定义」。「退出摆子」无改动则直接退出、有改动则撤销并返回原档；「校验并保存」保存自定义并开始。";
+  document.getElementById("hint").textContent = "摆子模式：在当前档位上增删改棋子；点「校验并保存」会下载 codes/layouts/{档位}.json，由你覆盖原文件后刷新页面即可。「退出摆子」无改动直接退出、有改动撤销并返回原档。";
   render();
   renderScoresheet();
 }
-// 摆子期间首次改动棋子：把档位记为「自定义」（同步下拉）并置脏标记
+// 摆子期间首次改动棋子：仅置脏标记——保存由 startFromSetup 写到当前档的 JSON，不再切到"自定义"
 function markSetupDirty() {
   if (setupDirty) return;
   setupDirty = true;
-  if (currentPreset !== "custom") {
-    currentPreset = "custom";
-    document.getElementById("preset").value = "custom";
-    syncPresetDropdown();
-  }
 }
 function exitSetup(toPlay) {
   if (!toPlay) {
@@ -3110,19 +3081,30 @@ function validateSetup() {
   if (!hasAnyMove("white")) return "开局周方无合法行动，无法开下。";
   return null;
 }
+// 把当前 pieces 序列化为布局 JSON 并触发浏览器下载（保存按钮使用）
+// 文件名 = presetKey + ".json"，用户须手动覆盖到 codes/layouts/{presetKey}.json
+function downloadLayoutAsJson(presetKey) {
+  const data = {
+    game: "商周大战",
+    preset: presetKey,
+    moves: [],
+    layout: pieces.map(p => [p.side, p.type, p.col, p.row]),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = presetKey + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 function startFromSetup() {
   const err = validateSetup();
   if (err) { document.getElementById("hint").textContent = "校验未通过：" + err; return; }
-  // 仅当本次有改动、或本就来自自定义档时，才记为自定义；否则保留原档、不覆盖已存自定义
-  const becameCustom = setupDirty || setupEntryPreset === "custom";
-  if (becameCustom) {
-    customLayout = pieces.map(p => [p.side, p.type, p.col, p.row]);
-    saveCustomLayout();
-    syncCustomSub();
-    currentPreset = "custom";
-    document.getElementById("preset").value = "custom";
-    syncPresetDropdown();
-  }
+  // 校验通过：触发浏览器下载当前布局到 codes/layouts/{currentPreset}.json
+  // 下载文件由用户手动覆盖；currentPreset 维持原值（不再切到 custom）
+  downloadLayoutAsJson(currentPreset);
   // 以校验后的状态为起点开始对局
   setupSnapshot = null;
   setupMode = false;
@@ -3136,9 +3118,7 @@ function startFromSetup() {
   moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
   studyMode = false; studyMoves = [];
   recomputeKingStates();
-  document.getElementById("hint").textContent = becameCustom
-    ? "自定义局面已保存并开始，白方先行。"
-    : "已校验并开始（未改动，保留「" + ((PRESETS[setupEntryPreset] || {}).name || "自定义") + "」档）。";
+  document.getElementById("hint").textContent = "已下载 " + currentPreset + ".json，请覆盖到 codes/layouts/" + currentPreset + ".json 后刷新页面载入新布局。白方先行。";
   render();
   renderScoresheet();
   aiMaybeSchedule(); // 摆子后若 AI 执白先手，触发首步
@@ -3147,8 +3127,6 @@ function startFromSetup() {
 /* =========================================================
  * 启动
  * ========================================================= */
-customLayout = loadCustomLayout(); // 恢复本浏览器已保存的自定义阵容
-syncCustomSub();
 initPieces();
 buildSkinRow();
 currentSkin = loadSkin();

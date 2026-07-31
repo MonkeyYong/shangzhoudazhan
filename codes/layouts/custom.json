@@ -1,0 +1,9 @@
+{
+  "game": "商周大战",
+  "preset": "custom",
+  "moves": [],
+  "layout": [
+    ["white","king",9,18], ["black","king",9,0],
+    ["white","soldier",9,6], ["black","soldier",9,12]
+  ]
+}
