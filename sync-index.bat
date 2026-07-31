@@ -1,18 +1,13 @@
 @echo off
-rem Sync the GitHub Pages entry (index.html) from the source app file.
-rem Source = the single *.html under .\codes\  (kept ASCII/wildcard to avoid
-rem embedding the Chinese filename, so cmd codepage cannot break the copy).
-rem Run after editing codes\*.html. Double-click or run from any shell.
+rem 构建发行版 index.html：把 codes/layouts/*.json 嵌入 HTML，消除 file:// 协议下 fetch 被拦截问题
+rem 运行方式：双击 sync-index.bat 或在终端执行
+rem 源文件 = codes/商周大战.html，发行版 = index.html
 setlocal
-set "SRC=%~dp0codes"
-set "DST=%~dp0index.html"
-set "FOUND="
-for %%f in ("%SRC%\*.html") do (
-  copy /Y "%%f" "%DST%" >nul && set "FOUND=1"
-)
-if not defined FOUND (
-  echo [sync] ERROR: no .html found in %SRC%
+set "ROOT=%~dp0"
+node "%ROOT%embed-layouts.cjs"
+if %ERRORLEVEL% neq 0 (
+  echo [sync] ERROR: embed-layouts.cjs failed
   exit /b 1
 )
-echo [sync] index.html updated from codes\*.html
+echo [sync] Done — open index.html in browser
 endlocal

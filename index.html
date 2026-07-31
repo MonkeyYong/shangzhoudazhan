@@ -491,6 +491,7 @@
   </aside>
 </div>
 
+<script>window.__EMBEDDED_LAYOUTS__ = {"small":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",9,2],["black","soldier",9,16],["white","soldier",6,4],["black","soldier",12,14],["white","soldier",12,4],["black","soldier",6,14],["white","soldier",9,6],["black","soldier",9,12]],"battle":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",9,2],["white","soldier",5,5],["black","soldier",13,13],["white","soldier",13,5],["black","soldier",5,13],["white","soldier",7,7],["black","soldier",11,11],["white","soldier",11,7],["black","soldier",7,11],["white","horse",11,3],["white","horse",7,3],["white","horse",9,5],["black","horse",7,15],["black","horse",11,15],["black","horse",9,13],["black","soldier",9,16]],"final":[["white","king",9,18],["black","king",9,0],["white","soldier",7,0],["black","soldier",11,18],["white","soldier",11,0],["black","soldier",7,18],["white","soldier",5,1],["black","soldier",13,17],["white","soldier",13,1],["black","soldier",5,17],["white","soldier",9,2],["black","soldier",9,16],["white","soldier",3,3],["black","soldier",15,15],["white","soldier",7,3],["black","soldier",11,15],["white","soldier",11,3],["black","soldier",7,15],["white","soldier",15,3],["black","soldier",3,15],["white","soldier",5,5],["black","soldier",13,13],["white","soldier",9,5],["black","soldier",9,13],["white","soldier",13,5],["black","soldier",5,13],["white","soldier",3,7],["black","soldier",15,11],["white","soldier",7,7],["black","soldier",11,11],["white","soldier",11,7],["black","soldier",7,11],["white","soldier",15,7],["black","soldier",3,11]],"custom":[["white","king",9,18],["black","king",9,0],["white","soldier",9,6],["black","soldier",9,12]]};</script>
 <script>
 "use strict";
 /* =========================================================
@@ -869,11 +870,26 @@ const AI_LEVELS = {
 let nextId = 1;
 function makeId() { return nextId++; }
 
-// 动态加载 3 个内置档位的初始布局（来自 codes/layouts/*.json）
-// 任意文件失败仅影响该 key：loadedLayouts[key]=null 并 console.warn；其他独立成功
-let loadedLayouts = {};   // {small, battle, final} → layout 数组 或 null（回退）
+// 加载 4 档初始布局（codes/layouts/*.json）
+// file:// 协议下优先用构建嵌入的数据（index.html），否则 fetch 被浏览器 CORS 拦截
+// fetch 路径在 HTTP 服务器模式下生效（python -m http.server / VS Code Live Server）
+let loadedLayouts = {};   // {small, battle, final, custom} → layout 数组 或 null（回退）
 let layoutsReady = false; // false 时 initPieces 用 PRESETS 兜底
 function loadPresetLayouts() {
+  // file:// 协议：使用 sync-index.bat 运行时嵌入的布局数据，不走 fetch
+  if (window.__EMBEDDED_LAYOUTS__) {
+    for (const key of ["small", "battle", "final", "custom"]) {
+      const raw = window.__EMBEDDED_LAYOUTS__[key];
+      if (raw) {
+        const v = validateLoadedLayout(raw, key);
+        loadedLayouts[key] = v;
+        if (!v) console.warn("[layouts] " + key + " 校验失败");
+      }
+    }
+    layoutsReady = true;
+    return Promise.resolve();
+  }
+  // HTTP 服务器模式：fetch 4 个 JSON 文件，失败时该 key 回退 null
   const tryOne = (key, url) => fetch(url + "?v=" + Date.now()).then(r => r.json()).then(j => {
     const v = validateLoadedLayout(j.layout, key);
     loadedLayouts[key] = v;

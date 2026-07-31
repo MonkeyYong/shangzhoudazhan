@@ -21,13 +21,14 @@ documentStub.createElement = (tag) => {
   return el;
 };
 
-// Task 11: mock-fetch 沙箱（从磁盘读 3 个真实 JSON）
+// Task 11: mock-fetch 沙箱（从磁盘读 4 个真实 JSON，兼容 cache-busting ?v=）
 const mockFiles = {
   "codes/layouts/small.json":  fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "small.json"), "utf8"),
   "codes/layouts/battle.json": fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "battle.json"), "utf8"),
   "codes/layouts/final.json":  fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "final.json"), "utf8"),
+  "codes/layouts/custom.json": fs.readFileSync(path.join("D:", "Codes", "Projects", "商周大战", "codes", "layouts", "custom.json"), "utf8"),
 };
-sandbox.fetch = (url) => Promise.resolve({ json: () => Promise.resolve(JSON.parse(mockFiles[url])) });
+sandbox.fetch = (url) => Promise.resolve({ json: () => Promise.resolve(JSON.parse(mockFiles[url.split("?")[0]])) });
 
 const EXPORT = `
 ;globalThis.__V = {
