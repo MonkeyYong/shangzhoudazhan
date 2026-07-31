@@ -457,11 +457,10 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
         </div>
         <div class="setup-actions">
           <div class="setup-group">
-            <button class="sp-chip erase" data-tool="erase">橡皮擦</button>
             <button id="btn-setup-clear">清空</button>
+            <button id="btn-setup-export">导出布局</button>
           </div>
           <div class="setup-group">
-            <button id="btn-setup-export">导出布局</button>
             <button id="btn-setup-import">导入布局</button>
           </div>
           <div class="setup-group">
@@ -2642,17 +2641,19 @@ canvas.addEventListener("click", (e) => {
     if (!cell0) return;
     const [c, r] = cell0;
     const hint = document.getElementById("hint");
-    if (setupTool === "erase") {
-      const t = pieceAt(c, r);
-      if (t) { markSetupDirty(); pieces = pieces.filter(p => p !== t); render(); }
-      return;
-    }
     const [side, type] = setupTool.split("_");
     if (type === "king" && pieces.some(p => p.side === side && p.type === "king")) {
-      hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先橡皮删除再放置。";
+      hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先点已放武王删除再放置。";
       return;
     }
     const occ = pieceAt(c, r);
+    // 同种同色棋子：自动橡皮擦（删除该格）
+    if (occ && occ.side === side && occ.type === type) {
+      markSetupDirty();
+      pieces = pieces.filter(p => p !== occ);
+      render();
+      return;
+    }
     if (occ) pieces = pieces.filter(p => p !== occ); // 覆盖替换
     markSetupDirty();
     pieces.push({ id: makeId(), side, type, col: c, row: r,
@@ -2863,12 +2864,9 @@ document.getElementById("setup-controls").addEventListener("click", (e) => {
   const chip = e.target.closest("[data-tool]");
   if (!chip) return;
   const tool = chip.dataset.tool;
-  // 再次点同一已选 chip：切到橡皮擦（或从橡皮擦自身切回默认白兵）—— 简化"放完/想擦"的切换
-  if (setupTool === tool) {
-    setSetupTool(tool === "erase" ? "white_soldier" : "erase");
-  } else {
-    setSetupTool(tool);
-  }
+  // 再次点同一已选 chip：切回默认白兵（橡皮擦已通过点同种棋子在 board 删除）
+  if (setupTool === tool) setSetupTool("white_soldier");
+  else setSetupTool(tool);
 });
 document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
 document.getElementById("btn-setup-export").addEventListener("click", exportLayout);
