@@ -2647,7 +2647,7 @@ canvas.addEventListener("click", (e) => {
     if (type === "king") {
       const existingKing = pieces.find(p => p.side === side && p.type === "king");
       if (existingKing) {
-        hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先点已放武王删除再放置。";
+        hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；点已放武王删除后再放新王。";
         return;
       }
     }
@@ -2896,10 +2896,10 @@ function importLayoutFromText(text) {
       return;
     }
     if (!setupMode) {
-      document.getElementById("hint").textContent = "请先进摆子再导入布局。";
+      document.getElementById("hint").textContent = "请先进摆子再导入。";
       return;
     }
-    if (!confirm("导入布局将覆盖当前摆子，是否继续？")) return;
+    if (!confirm("导入布局会覆盖当前摆子，是否继续？")) return;
     pieces = piecesFromLayout(layout);
     markSetupDirty();
     render();
@@ -3017,7 +3017,7 @@ function newGame() {
     setupDirty = false;
     setupMode = true;
     setupTool = "white_soldier";
-    document.getElementById("hint").textContent = "摆子模式：在面板选棋子后点棋盘放置，选橡皮删除；摆好点「校验并保存」。";
+    document.getElementById("hint").textContent = "摆子模式：在面板选棋子后点棋盘放置，重复点同种棋子删除；摆好点「导出」。";
     render();
     renderScoresheet();
     return;
@@ -3063,7 +3063,7 @@ function enterSetup() {
   selected = null; legalMap.clear();
   // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义
   setupTool = "white_soldier";
-  document.getElementById("hint").textContent = "摆子模式：在当前档位上增删改棋子；点「校验并保存」会下载 codes/layouts/{档位}.json，由你覆盖原文件后刷新页面即可。「退出摆子」无改动直接退出、有改动撤销并返回原档。";
+  document.getElementById("hint").textContent = "摆子模式：在当前档位上增删改棋子（同种棋子再点删除）；点「导出」会下载 codes/layouts/{档位}.json，跑 sync-index.bat 写入 HTML 源码后刷新即生效。退出无改动直接退出、有改动撤销并返回原档。";
   render();
   renderScoresheet();
 }
