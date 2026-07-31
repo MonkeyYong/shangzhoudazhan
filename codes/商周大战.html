@@ -502,7 +502,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
     <p>主动解锁：己方任意棋子移至武王行动范围（即邻接 1 格）即解除禁锢。</p>
     <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
     <h3>分身</h3>
-    <p>该方武王首次移动后解锁分身能力。此后士兵进入己方武王（含分身）行动范围，或武王进入士兵行动范围，可即时将该士兵变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
+    <p>该方武王首次移动后解锁分身能力。此后士兵或马进入己方武王（含分身）行动范围，或武王进入士兵或马的行动范围，可即时将该棋子变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
     <h3>暴走</h3>
     <p>武王/分身踏入己方王城即获暴走：可直线斜线走无限格（可穿己方、不可穿敌，吃敌后停）。触发后己方失去分身能力，对方武王全部解除禁锢。</p>
     <h3>胜负</h3>
@@ -1120,7 +1120,7 @@ function berserkCheck(moved) {
   }
 }
 
-// 士兵是否在己方任一武王(含分身)理论范围内
+// 小棋子（士兵/马）是否在己方任一武王(含分身)理论范围内
 function inAnyFriendlyBigRange(soldier) {
   for (const k of pieces) {
     if (k.side !== soldier.side) continue;
@@ -1130,22 +1130,22 @@ function inAnyFriendlyBigRange(soldier) {
   return false;
 }
 
-// 分身触发（双向）：士兵进入武王范围，或武王进入士兵范围。
-// moved 为本次移动的棋子；返回 true 表示存在可变身的士兵。
+// 分身触发（双向）：士兵或马进入武王范围，或武王进入士兵或马的范围。
+// moved 为本次移动的棋子；返回 true 表示存在可变身的小棋子（兵/卒或马）。
 function cloneOfferCheck(moved) {
   cloneOfferCells.clear();
   cloneCandidates = [];
   if (sideLostClone[moved.side]) return false;
   if (!sideCloneUnlocked[moved.side]) return false; // 须该方武王首次移动后才解锁分身
   if (bigCount(moved.side) >= 2) return false;
-  if (moved.type === "soldier") {
-    // 情形一：士兵进入武王移动范围
+  if (moved.type === "soldier" || moved.type === "horse") {
+    // 情形一：士兵/马进入武王移动范围
     if (inAnyFriendlyBigRange(moved)) cloneCandidates.push(moved);
   } else if (moved.type === "king" || moved.type === "clone") {
-    // 情形二：武王进入小棋子移动范围（等价于：士兵落在武王2格范围内）
+    // 情形二：武王进入小棋子移动范围（等价于：小棋子落在武王2格范围内）
     const range = theoreticalRange(moved);
     for (const s of pieces) {
-      if (s.side !== moved.side || s.type !== "soldier") continue;
+      if (s.side !== moved.side || (s.type !== "soldier" && s.type !== "horse")) continue;
       if (range.has(s.col + "," + s.row)) cloneCandidates.push(s);
     }
   }
@@ -1266,7 +1266,7 @@ function doMove(piece, col, row) {
   // 主动解锁
   activeUnlockCheck(piece);
 
-  // 分身提示（仅士兵且可变身时）
+  // 分身提示（士兵/马且可变身时）
   let offered = cloneOfferCheck(piece);
 
   // 被动重算禁锢状态
@@ -1281,7 +1281,7 @@ function settleMove(piece, moveResult, cloneDecision) {
   stepCount++;
   let cloneHappened = false;
   if (moveResult.offered && cloneCandidates.length > 0 && cloneDecision && bigCount(piece.side) < 2) {
-    const s = cloneCandidates[0]; // 多个候选时取首个（士兵等价，不影响）
+    const s = cloneCandidates[0]; // 多个候选时取首个
     s.type = "clone";
     s.isClone = true;
     s.state = "free";
@@ -1318,7 +1318,7 @@ function settleMove(piece, moveResult, cloneDecision) {
 function finishTurn(piece, res, ctx) {
   let cloneDecision = false;
   if (res.offered && cloneCandidates.length > 0) {
-    cloneDecision = confirm("士兵与武王相互进入行动范围，是否将该士兵转化为武王分身？");
+    cloneDecision = confirm("士兵或马与武王相互进入行动范围，是否将其转化为武王分身？");
   }
   const r = settleMove(piece, res, cloneDecision);
   const rec = buildRecord(piece, res, ctx, r);
@@ -1683,10 +1683,10 @@ function simBerserkCheck(sim, moved) {
     k.activelyUnlocked = true;
   }
 }
-// 首个可转化士兵（对应全局 settleMove L1009「取 cloneCandidates[0]」的顺序）
+// 首个可转化小棋子（士兵或马；对应全局 settleMove「取 cloneCandidates[0]」的顺序）
 function simFirstCloneCand(sim, moved) {
-  if (moved.type === "soldier") {
-    // 情形一：士兵进入己方武王范围 → 转化该士兵
+  if (moved.type === "soldier" || moved.type === "horse") {
+    // 情形一：士兵/马进入己方武王范围 → 转化该小棋子
     for (const k of sim.pieces) {
       if (k.dead || k.side !== moved.side) continue;
       if (k.type !== "king" && k.type !== "clone") continue;
@@ -1694,9 +1694,9 @@ function simFirstCloneCand(sim, moved) {
     }
     return null;
   }
-  // 情形二：武王/分身进入士兵范围 → 转化范围内首个士兵
+  // 情形二：武王/分身进入小棋子范围 → 转化范围内首个士兵/马
   for (const s of sim.pieces) {
-    if (s.dead || s.side !== moved.side || s.type !== "soldier") continue;
+    if (s.dead || s.side !== moved.side || (s.type !== "soldier" && s.type !== "horse")) continue;
     if (simInTheoryRange(moved, s.col, s.row)) return s;
   }
   return null;
