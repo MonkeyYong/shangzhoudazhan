@@ -3157,6 +3157,8 @@ if (presetSel) {
   const oldHint = hintEl ? hintEl.textContent : "";
   if (hintEl) hintEl.textContent = "加载布局…";
   loadPresetLayouts().then(() => {
+    initPieces();   // 用 loadedLayouts 重新装配棋子（嵌入/fetch 数据就绪后覆盖 PRESETS 兜底）
+    render();       // 重绘棋盘
     presetSel.disabled = false;
     if (hintEl && hintEl.textContent === "加载布局…") hintEl.textContent = oldHint;
   });
