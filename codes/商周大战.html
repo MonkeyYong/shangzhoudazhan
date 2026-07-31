@@ -3008,7 +3008,7 @@ function enterSetup() {
   selected = null; legalMap.clear();
   // 以当前棋盘为起点二次编辑（不清空）；不在此切自定义，等首次改动棋子再切（markSetupDirty）
   setupTool = "white_soldier";
-  document.getElementById("hint").textContent = "摆子模式：在原布局上增删改棋子；改动后档位记为「自定义」。「退出摆子」无改动则直接退出、有改动则撤销并返回原档；「校验并保存」保存自定义并开始。";
+  document.getElementById("hint").textContent = "摆子模式：在当前档位上增删改棋子；点「校验并保存」会下载 codes/layouts/{档位}.json，由你覆盖原文件后刷新页面即可。「退出摆子」无改动直接退出、有改动撤销并返回原档。";
   render();
   renderScoresheet();
 }
