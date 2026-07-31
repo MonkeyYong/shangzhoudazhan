@@ -933,12 +933,12 @@ function piecesFromLayout(data) {
   }));
 }
 
-// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 用自定义布局）
+// 初始局面（按当前档位装配：基础 8 子 + 机动兵；custom 走 loadedLayouts["custom"]）
 function initPieces() {
   nextId = 1;
   let data;
   if (currentPreset === "custom") {
-    data = customLayout || [];
+    data = loadedLayouts["custom"] || [];
   } else {
     data = (loadedLayouts[currentPreset]) || PRESETS[currentPreset].layout;
   }
