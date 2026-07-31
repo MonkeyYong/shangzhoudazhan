@@ -53,6 +53,7 @@ const sandbox = {
   confirm: () => false, alert(){},
   setTimeout, clearTimeout, console,
   FileReader: function(){}, Event: function(){},
+  Blob: function(){},
   URL: { createObjectURL: () => "", revokeObjectURL() {} },
   fetch: (url) => {
     // mock：4 个 layout 全部给一份最小合法布局（含 horse 兼容）
