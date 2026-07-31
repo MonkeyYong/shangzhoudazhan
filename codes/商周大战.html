@@ -495,11 +495,11 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
   <!-- 规则面板：独立列于右面板右侧，默认隐藏，由 #btn-rules 切换 -->
   <aside id="rules">
     <h3>移动</h3>
-    <p>横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
+    <p>横、竖、斜各方向走 1 格。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
     <h3>禁锢与解锁</h3>
     <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。</p>
     <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
-    <p>主动解锁：己方任意棋子移至武王行动范围（2 格）即解除禁锢。</p>
+    <p>主动解锁：己方任意棋子移至武王行动范围（即邻接 1 格）即解除禁锢。</p>
     <p>武王首次移动后失去无敌，可被吃；并解锁分身能力。</p>
     <h3>分身</h3>
     <p>该方武王首次移动后解锁分身能力。此后士兵进入己方武王（含分身）行动范围，或武王进入士兵行动范围，可即时将该士兵变为分身（大棋子），不另耗回合。每方同时最多 2 个武王（含本体与分身）。</p>
@@ -1013,7 +1013,7 @@ function reachableCells(piece) {
   const moves = [];
   if (piece.state === "imprisoned_invincible") return moves;
   if (piece.type === "horse") return knightReach(piece);
-  const maxStep = piece.state === "berserk" ? 18 : 2;
+  const maxStep = piece.state === "berserk" ? 18 : 1;
   for (const [dc, dr] of DIRS) {
     for (let s = 1; s <= maxStep; s++) {
       const nc = piece.col + dc * s, nr = piece.row + dr * s;
@@ -1573,7 +1573,7 @@ function simAt(sim, c, r) {
 // 是否存在至少一个可达格（零分配短路；评估机动性用，容忍「吃无敌王」过滤的极小误差）
 function simHasReach(sim, piece) {
   if (piece.state === "imprisoned_invincible") return false;
-  const maxStep = piece.state === "berserk" ? 18 : 2;
+  const maxStep = piece.state === "berserk" ? 18 : 1;
   for (const [dc, dr] of DIRS) {
     for (let s = 1; s <= maxStep; s++) {
       const nc = piece.col + dc * s, nr = piece.row + dr * s;
@@ -1599,7 +1599,7 @@ function simInTheoryRange(king, c, r) {
 // 是否覆盖指定格（零分配、命中即停；用于禁锢统计与评估）
 function simCanAttack(sim, piece, tc, tr) {
   if (piece.state === "imprisoned_invincible") return false;
-  const maxStep = piece.state === "berserk" ? 18 : 2;
+  const maxStep = piece.state === "berserk" ? 18 : 1;
   for (const [dc, dr] of DIRS) {
     for (let s = 1; s <= maxStep; s++) {
       const nc = piece.col + dc * s, nr = piece.row + dr * s;
