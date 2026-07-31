@@ -3012,15 +3012,10 @@ function enterSetup() {
   render();
   renderScoresheet();
 }
-// 摆子期间首次改动棋子：把档位记为「自定义」（同步下拉）并置脏标记
+// 摆子期间首次改动棋子：仅置脏标记——保存由 startFromSetup 写到当前档的 JSON，不再切到"自定义"
 function markSetupDirty() {
   if (setupDirty) return;
   setupDirty = true;
-  if (currentPreset !== "custom") {
-    currentPreset = "custom";
-    document.getElementById("preset").value = "custom";
-    syncPresetDropdown();
-  }
 }
 function exitSetup(toPlay) {
   if (!toPlay) {
