@@ -181,7 +181,7 @@
 
   /* 摆子模式面板 */
   #setup-controls { display: none; }
-  .setup-palette { display: flex; flex-direction: column; gap: 6px; margin-bottom: 7px; }
+  .setup-palette { display: flex; gap: 3px; justify-content: space-between; margin-bottom: 7px; }
   .sp-side { display: flex; gap: 6px; justify-content: center; }
   .sp-chip {
     display: flex; align-items: center; gap: 6px; justify-content: center;
@@ -193,15 +193,15 @@
   .sp-chip:hover { border-color: var(--gold-soft); }
   .sp-chip.sel { border-color: var(--gold); background: linear-gradient(160deg, var(--primary-1), var(--primary-2)); color: #ffe9a8; box-shadow: 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
   .sp-chip.erase.sel { background: linear-gradient(160deg, #5a241e, #3f1410); border-color: #d44848; color: #ffd0c4; box-shadow: 0 0 0 1px rgba(212,72,72,.3); }
-  /* 棋子形按钮：直径 38px 球面径向渐变，单字居中 */
+  /* 棋子形按钮：直径 32px 球面径向渐变，单字居中 */
   .sp-chip.sp-stone {
-    width: 38px; height: 38px; padding: 0; border-radius: 50%;
+    width: 32px; height: 32px; padding: 0; border-radius: 50%; flex: 0 0 32px;
     color: var(--ink); border: 1px solid var(--line);
     background: linear-gradient(160deg, var(--surface-1), var(--surface-2));
     box-shadow: inset 0 -3px 4px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.08), 0 2px 4px rgba(0,0,0,.35);
     font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-weight: 700;
     transition: transform .12s, border-color .18s, box-shadow .18s, background .18s;
-    font-size: 15px;
+    font-size: 14px;
   }
   .sp-chip.sp-stone[data-tool^="white_"] {
     /* 白方子用白色径向渐变（同白棋）+ 单字深色 */
@@ -216,7 +216,7 @@
   .sp-chip.sp-stone[data-tool="black_horse"] {
     /* 马比兵小一档：与棋盘同口径，但按钮统一尺寸；视觉上靠细节暗示（细灰内环） */
     box-shadow: inset 0 -3px 4px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.08), inset 0 0 0 1.5px rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.35);
-    font-size: 14px;
+    font-size: 13px;
   }
   .sp-chip.sp-stone:hover { transform: translateY(-1px); border-color: var(--gold-soft); }
   .sp-chip.sp-stone.sel {
@@ -448,16 +448,12 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
       </div>
       <div id="setup-controls">
         <div class="setup-palette" id="setup-palette">
-          <div class="sp-side">
-            <div class="sp-chip sp-stone" data-tool="white_king"><span class="sp-glyph">武</span></div>
-            <div class="sp-chip sp-stone" data-tool="white_horse"><span class="sp-glyph">马</span></div>
-            <div class="sp-chip sp-stone" data-tool="white_soldier"><span class="sp-glyph">兵</span></div>
-          </div>
-          <div class="sp-side">
-            <div class="sp-chip sp-stone" data-tool="black_king"><span class="sp-glyph">纣</span></div>
-            <div class="sp-chip sp-stone" data-tool="black_horse"><span class="sp-glyph">马</span></div>
-            <div class="sp-chip sp-stone" data-tool="black_soldier"><span class="sp-glyph">卒</span></div>
-          </div>
+          <div class="sp-chip sp-stone" data-tool="white_king"><span class="sp-glyph">武</span></div>
+          <div class="sp-chip sp-stone" data-tool="white_horse"><span class="sp-glyph">马</span></div>
+          <div class="sp-chip sp-stone" data-tool="white_soldier"><span class="sp-glyph">兵</span></div>
+          <div class="sp-chip sp-stone" data-tool="black_king"><span class="sp-glyph">纣</span></div>
+          <div class="sp-chip sp-stone" data-tool="black_horse"><span class="sp-glyph">马</span></div>
+          <div class="sp-chip sp-stone" data-tool="black_soldier"><span class="sp-glyph">卒</span></div>
         </div>
         <div class="setup-actions">
           <div class="setup-group">
@@ -2865,7 +2861,14 @@ levelDropdown.setDisabled(true); // 默认双人对弈，难度禁用
 document.getElementById("btn-edit-setup").addEventListener("click", enterSetup);
 document.getElementById("setup-controls").addEventListener("click", (e) => {
   const chip = e.target.closest("[data-tool]");
-  if (chip) setSetupTool(chip.dataset.tool);
+  if (!chip) return;
+  const tool = chip.dataset.tool;
+  // 再次点同一已选 chip：切到橡皮擦（或从橡皮擦自身切回默认白兵）—— 简化"放完/想擦"的切换
+  if (setupTool === tool) {
+    setSetupTool(tool === "erase" ? "white_soldier" : "erase");
+  } else {
+    setSetupTool(tool);
+  }
 });
 document.getElementById("btn-setup-clear").addEventListener("click", clearSetup);
 document.getElementById("btn-setup-export").addEventListener("click", exportLayout);
