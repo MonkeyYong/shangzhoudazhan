@@ -232,7 +232,7 @@
     color: #fff;
   }
   .sp-glyph { line-height: 1; }
-  .setup-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .setup-actions { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
   .setup-actions > .setup-group { display: flex; flex-direction: column; gap: 6px; }
   #btn-setup-exit {
     background: linear-gradient(160deg, #5a241e, #3f1410); color: #ffd0c4; border-color: #d44848;
@@ -456,17 +456,10 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
           <div class="sp-chip sp-stone" data-tool="black_soldier"><span class="sp-glyph">卒</span></div>
         </div>
         <div class="setup-actions">
-          <div class="setup-group">
-            <button id="btn-setup-clear">清空</button>
-            <button id="btn-setup-export">导出布局</button>
-          </div>
-          <div class="setup-group">
-            <button id="btn-setup-import">导入布局</button>
-          </div>
-          <div class="setup-group">
-            <button id="btn-setup-start" class="btn-primary">校验保存</button>
-            <button id="btn-setup-exit">退出摆子</button>
-          </div>
+          <button id="btn-setup-clear">清空</button>
+          <button id="btn-setup-import">导入</button>
+          <button id="btn-setup-start" class="btn-primary">导出</button>
+          <button id="btn-setup-exit">退出</button>
         </div>
         <input type="file" id="file-import-layout" accept=".json,application/json" style="display:none">
       </div>
