@@ -1,3 +1,24 @@
+# IDE
 .idea/
+
+# Claude / 项目本地配置
 .claude/settings.local.json
+AGENTS.md
+
+# SDD workspace（plan/skill 临时文件）
 .superpowers/
+
+# 插件缓存
+.serena/
+.workbuddy/
+
+# Playwright 测试产物
+.playwright-mcp/
+
+# 用户手测的 JSON 备份（不要进仓库）
+codes/layouts/*.bak.json
+*.bak
+
+# OS 临时
+.DS_Store
+Thumbs.db
