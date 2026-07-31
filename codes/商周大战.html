@@ -181,7 +181,8 @@
 
   /* 摆子模式面板 */
   #setup-controls { display: none; }
-  .setup-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 7px; }
+  .setup-palette { display: flex; flex-direction: column; gap: 6px; margin-bottom: 7px; }
+  .sp-side { display: flex; gap: 6px; justify-content: center; }
   .sp-chip {
     display: flex; align-items: center; gap: 6px; justify-content: center;
     padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
@@ -192,11 +193,45 @@
   .sp-chip:hover { border-color: var(--gold-soft); }
   .sp-chip.sel { border-color: var(--gold); background: linear-gradient(160deg, var(--primary-1), var(--primary-2)); color: #ffe9a8; box-shadow: 0 0 0 1px var(--gold-faint), inset 0 1px 0 rgba(255,255,255,.08); }
   .sp-chip.erase.sel { background: linear-gradient(160deg, #5a241e, #3f1410); border-color: #d44848; color: #ffd0c4; box-shadow: 0 0 0 1px rgba(212,72,72,.3); }
-  .sp-dot { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; box-shadow: inset 0 -2px 3px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.45); }
-  .sp-dot.wk { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
-  .sp-dot.ws { background: radial-gradient(circle at 35% 30%, #fff, #ead9b0 60%, #b8a676); }
-  .sp-dot.bk { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
-  .sp-dot.bs { background: radial-gradient(circle at 35% 30%, #8a8a8a, #2a2a2a 60%, #050505); }
+  /* 棋子形按钮：直径 38px 球面径向渐变，单字居中 */
+  .sp-chip.sp-stone {
+    width: 38px; height: 38px; padding: 0; border-radius: 50%;
+    color: var(--ink); border: 1px solid var(--line);
+    background: linear-gradient(160deg, var(--surface-1), var(--surface-2));
+    box-shadow: inset 0 -3px 4px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.08), 0 2px 4px rgba(0,0,0,.35);
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-weight: 700;
+    transition: transform .12s, border-color .18s, box-shadow .18s, background .18s;
+    font-size: 15px;
+  }
+  .sp-chip.sp-stone[data-tool^="white_"] {
+    /* 白方子用白色径向渐变（同白棋）+ 单字深色 */
+    background: radial-gradient(circle at 35% 28%, #fff, #f4e7c1 55%, #c1a879 95%);
+    color: #4a3520; text-shadow: 0 1px 0 rgba(255,255,255,.55);
+  }
+  .sp-chip.sp-stone[data-tool^="black_"] {
+    background: radial-gradient(circle at 35% 28%, #888, #2a2a2a 60%, #050505);
+    color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.6);
+  }
+  .sp-chip.sp-stone[data-tool="white_horse"],
+  .sp-chip.sp-stone[data-tool="black_horse"] {
+    /* 马比兵小一档：与棋盘同口径，但按钮统一尺寸；视觉上靠细节暗示（细灰内环） */
+    box-shadow: inset 0 -3px 4px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.08), inset 0 0 0 1.5px rgba(0,0,0,.25), 0 2px 4px rgba(0,0,0,.35);
+    font-size: 14px;
+  }
+  .sp-chip.sp-stone:hover { transform: translateY(-1px); border-color: var(--gold-soft); }
+  .sp-chip.sp-stone.sel {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px var(--gold-faint), inset 0 -3px 4px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.08), 0 2px 6px rgba(0,0,0,.4);
+  }
+  .sp-chip.sp-stone[data-tool^="white_"].sel {
+    background: radial-gradient(circle at 35% 28%, #fff, #f6dfaf 55%, #b78a3f 95%);
+    color: #3a2810;
+  }
+  .sp-chip.sp-stone[data-tool^="black_"].sel {
+    background: radial-gradient(circle at 35% 28%, #aaa, #1a1a1a 60%, #000);
+    color: #fff;
+  }
+  .sp-glyph { line-height: 1; }
   .setup-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
   .setup-actions > .setup-group { display: flex; flex-direction: column; gap: 6px; }
   #btn-setup-exit {
@@ -413,12 +448,16 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
       </div>
       <div id="setup-controls">
         <div class="setup-palette" id="setup-palette">
-          <div class="sp-chip" data-tool="white_king"><span class="sp-dot wk"></span>周武王</div>
-          <div class="sp-chip" data-tool="white_soldier"><span class="sp-dot ws"></span>周兵</div>
-          <div class="sp-chip" data-tool="black_king"><span class="sp-dot bk"></span>商纣王</div>
-          <div class="sp-chip" data-tool="black_soldier"><span class="sp-dot bs"></span>商卒</div>
-          <div class="sp-chip" data-tool="white_horse"><span class="sp-dot ws"></span>周马</div>
-          <div class="sp-chip" data-tool="black_horse"><span class="sp-dot bs"></span>商马</div>
+          <div class="sp-side">
+            <div class="sp-chip sp-stone" data-tool="white_king"><span class="sp-glyph">武</span></div>
+            <div class="sp-chip sp-stone" data-tool="white_horse"><span class="sp-glyph">马</span></div>
+            <div class="sp-chip sp-stone" data-tool="white_soldier"><span class="sp-glyph">兵</span></div>
+          </div>
+          <div class="sp-side">
+            <div class="sp-chip sp-stone" data-tool="black_king"><span class="sp-glyph">纣</span></div>
+            <div class="sp-chip sp-stone" data-tool="black_horse"><span class="sp-glyph">马</span></div>
+            <div class="sp-chip sp-stone" data-tool="black_soldier"><span class="sp-glyph">卒</span></div>
+          </div>
         </div>
         <div class="setup-actions">
           <div class="setup-group">
@@ -430,8 +469,8 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
             <button id="btn-setup-import">导入布局</button>
           </div>
           <div class="setup-group">
-            <button id="btn-setup-start" class="btn-primary">校验并保存</button>
-            <button id="btn-setup-exit">退出摆子 ✕</button>
+            <button id="btn-setup-start" class="btn-primary">校验保存</button>
+            <button id="btn-setup-exit">退出摆子</button>
           </div>
         </div>
         <input type="file" id="file-import-layout" accept=".json,application/json" style="display:none">
