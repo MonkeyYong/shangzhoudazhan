@@ -3081,17 +3081,30 @@ function validateSetup() {
   if (!hasAnyMove("white")) return "开局周方无合法行动，无法开下。";
   return null;
 }
+// 把当前 pieces 序列化为布局 JSON 并触发浏览器下载（保存按钮使用）
+// 文件名 = presetKey + ".json"，用户须手动覆盖到 codes/layouts/{presetKey}.json
+function downloadLayoutAsJson(presetKey) {
+  const data = {
+    game: "商周大战",
+    preset: presetKey,
+    moves: [],
+    layout: pieces.map(p => [p.side, p.type, p.col, p.row]),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = presetKey + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 function startFromSetup() {
   const err = validateSetup();
   if (err) { document.getElementById("hint").textContent = "校验未通过：" + err; return; }
-  // 仅当本次有改动、或本就来自自定义档时，才记为自定义；否则保留原档、不覆盖已存自定义
-  const becameCustom = setupDirty || setupEntryPreset === "custom";
-  if (becameCustom) {
-    loadedLayouts["custom"] = pieces.map(p => [p.side, p.type, p.col, p.row]);
-    currentPreset = "custom";
-    document.getElementById("preset").value = "custom";
-    syncPresetDropdown();
-  }
+  // 校验通过：触发浏览器下载当前布局到 codes/layouts/{currentPreset}.json
+  // 下载文件由用户手动覆盖；currentPreset 维持原值（不再切到 custom）
+  downloadLayoutAsJson(currentPreset);
   // 以校验后的状态为起点开始对局
   setupSnapshot = null;
   setupMode = false;
@@ -3105,9 +3118,7 @@ function startFromSetup() {
   moveLog = []; replayMode = false; replayMoves = []; replayIndex = 0;
   studyMode = false; studyMoves = [];
   recomputeKingStates();
-  document.getElementById("hint").textContent = becameCustom
-    ? "自定义局面已保存并开始，白方先行。"
-    : "已校验并开始（未改动，保留「" + ((PRESETS[setupEntryPreset] || {}).name || "自定义") + "」档）。";
+  document.getElementById("hint").textContent = "已下载 " + currentPreset + ".json，请覆盖到 codes/layouts/" + currentPreset + ".json 后刷新页面载入新布局。白方先行。";
   render();
   renderScoresheet();
   aiMaybeSchedule(); // 摆子后若 AI 执白先手，触发首步
