@@ -762,26 +762,26 @@ function paintShanShui(ox, W, H) {
 }
 const SKINS = {
   warm: {
-    name: "经典暖木",
+    name: "暖木",
     board: { bg0:"#d6b47c", bg1:"#b8915a", grid:"rgba(58,42,20,0.85)", star:"#3a2a14", coord:"#3a2a14" },
     palace: { a:0.20, glow:0,  hi:0.10, vig:0.55 },
     css: { "--bg-page":"#2b2b2b","--wrap-1":"#6b4a26","--wrap-2":"#4a3015","--wrap-ring":"rgba(232,195,74,0.45)","--panel-1":"#2a231a","--panel-2":"#1c1710","--surface-1":"#3b3327","--surface-2":"#2a241a","--surface-1h":"#473d2c","--surface-2h":"#332b1e","--pop-1":"#2c2418","--pop-2":"#1d1710","--primary-1":"#5a4a1e","--primary-2":"#3f3312","--primary-1h":"#6b5824","--primary-2h":"#4a3c16","--line":"#4a3a24" }
   },
   dark: {
-    name: "玄铁夜战",
+    name: "玄铁",
     board: { bg0:"#5b4030", bg1:"#342317", grid:"rgba(214,176,96,0.42)", star:"rgba(214,176,96,0.5)", coord:"#c6a05a" },
     palace: { a:0.50, glow:14, hi:0.20, vig:1.0 },
     css: { "--bg-page":"#14110d","--wrap-1":"#2a1d12","--wrap-2":"#160e08","--wrap-ring":"rgba(214,176,96,0.4)","--panel-1":"#1b1610","--panel-2":"#0f0b07","--surface-1":"#2a2218","--surface-2":"#19130c","--surface-1h":"#352a1d","--surface-2h":"#241b12","--pop-1":"#1c1610","--pop-2":"#110c07","--primary-1":"#4a3a18","--primary-2":"#2e2410","--primary-1h":"#5a4820","--primary-2h":"#3a2e14","--line":"#3a2c1c" }
   },
   qinglv: {
-    name: "素笺淡彩",
+    name: "素笺",
     board: { bg0:"#f5edd8", bg1:"#ebe0c3", grid:"rgba(120,98,70,0.42)", star:"rgba(120,92,60,0.55)", coord:"#9a7a52", paint: paintSuJian },
     palace: { a:0.34, glow:0, hi:0, vig:0.20, borderA:0.18, fade:true, bevel:false, vignette:false, inner:false, studs:false },
     accent: { white: PAL_AZURE, black: PAL_ROSE },
     css: { "--bg-page":"#1b140d","--wrap-1":"#cda572","--wrap-2":"#ad8049","--wrap-ring":"rgba(255,240,210,0.55)","--panel-1":"#241b12","--panel-2":"#150f09","--surface-1":"#33281c","--surface-2":"#221a11","--surface-1h":"#42331f","--surface-2h":"#2c2114","--pop-1":"#241b12","--pop-2":"#150f09","--primary-1":"#5a4422","--primary-2":"#3c2d15","--primary-1h":"#6e542a","--primary-2h":"#4a3819","--line":"#4a3826" }
   },
   star: {
-    name: "霓虹星空",
+    name: "星空",
     board: { bg0:"#16306a", bg1:"#060a1c", grid:"rgba(120,200,255,0.5)", star:"rgba(150,210,255,0.7)", coord:"#bfe6ff", neon:true, neonColor:"rgba(110,200,255,0.9)", paint: paintStar },
     palace: { a:0.16, glow:12, hi:0.10, vig:0.8, borderA:0.95, fade:true, bevel:false, vignette:false, inner:false, studs:false },
     accent: { white: NEON_CYAN, black: NEON_PINK },
@@ -790,7 +790,7 @@ const SKINS = {
 };
 // 青绿山水皮肤：复用素笺的宫城/棋子/网格配置，仅换底为程序化山水；宫城以 multiply 渗纸
 SKINS.shanshui = {
-  name: "青绿山水",
+  name: "青山",
   board: { bg0:"#f1e7cd", bg1:"#6f9a8e", grid:SKINS.qinglv.board.grid, star:SKINS.qinglv.board.star, coord:SKINS.qinglv.board.coord, paint: paintShanShui },
   palace: Object.assign({}, SKINS.qinglv.palace, { a:0.42 }),
   accent: SKINS.qinglv.accent,
