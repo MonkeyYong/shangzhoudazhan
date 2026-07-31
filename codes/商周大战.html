@@ -2642,17 +2642,21 @@ canvas.addEventListener("click", (e) => {
     const [c, r] = cell0;
     const hint = document.getElementById("hint");
     const [side, type] = setupTool.split("_");
-    if (type === "king" && pieces.some(p => p.side === side && p.type === "king")) {
-      hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先点已放武王删除再放置。";
-      return;
-    }
     const occ = pieceAt(c, r);
-    // 同种同色棋子：自动橡皮擦（删除该格）
+    // 同种同色棋子：先自动橡皮擦（删除该格）—— 王/纣也一样删
     if (occ && occ.side === side && occ.type === type) {
       markSetupDirty();
       pieces = pieces.filter(p => p !== occ);
       render();
       return;
+    }
+    // 王规则：每方仅 1 王；空位才能放置，已存在则拦截
+    if (type === "king") {
+      const existingKing = pieces.find(p => p.side === side && p.type === "king");
+      if (existingKing) {
+        hint.textContent = (side === "white" ? "周方" : "商方") + "已有武王，每方仅可 1 王；先点已放武王删除再放置。";
+        return;
+      }
     }
     if (occ) pieces = pieces.filter(p => p !== occ); // 覆盖替换
     markSetupDirty();
