@@ -171,25 +171,24 @@
   .cd-opt.sel .cd-sub { color: #d8b86a; }
   .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
 
-/* AI 参数紧凑输入（难度=depth，1-10）：替代原三档下拉 */
-.cfg-num-row { display: flex; align-items: center; gap: 5px; }
+/* AI 参数紧凑输入（难度=depth，1-10）：替代原三档下拉。标签在上、控件独占整格（~75px/列） */
 .num-step {
-  flex: 1; display: flex; align-items: center; gap: 3px;
+  width: 100%; display: flex; align-items: center; gap: 3px;
   background: linear-gradient(160deg, var(--surface-1), var(--surface-2));
   border: 1px solid var(--line); border-radius: 6px;
   padding: 2px 4px;
 }
 .num-btn {
-  flex: 0 0 22px; width: 22px; height: 22px; padding: 0;
+  flex: 0 0 18px; width: 18px; height: 18px; padding: 0;
   border: 1px solid var(--line); border-radius: 4px;
   background: rgba(255,255,255,.04); color: var(--ink);
-  font-size: 14px; font-weight: 700; line-height: 1; cursor: pointer;
+  font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer;
   transition: border-color .15s, background .15s;
 }
 .num-btn:hover { border-color: var(--gold-soft); background: rgba(232,195,74,.1); }
 .num-btn:active { transform: scale(.94); }
 .num-inp {
-  flex: 1; min-width: 0; width: 100%;
+  flex: 1; min-width: 24px; width: 100%;
   background: transparent; border: 0; outline: none;
   color: var(--ink); font-size: 13px; font-weight: 700;
   text-align: center; letter-spacing: .5px;
@@ -446,13 +445,11 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
           </div>
         </div>
         <div class="cfg-cell" id="ai-params-cell">
-          <div class="cfg-num-row">
-            <label class="cfg-cap" for="ai-depth">难度</label>
-            <div class="num-step">
-              <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="难度减 1">−</button>
-              <input type="number" id="ai-depth" value="4" min="1" max="10" class="num-inp">
-              <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
-            </div>
+          <label class="cfg-cap" for="ai-depth">难度</label>
+          <div class="num-step">
+            <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="难度减 1">−</button>
+            <input type="number" id="ai-depth" value="4" min="1" max="10" class="num-inp">
+            <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
           </div>
         </div>
       </div>
