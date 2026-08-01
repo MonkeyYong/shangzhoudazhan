@@ -14,6 +14,7 @@ AGENTS.md
 
 # Playwright 测试产物
 .playwright-mcp/
+node_modules/
 
 # 用户手测的 JSON 备份（不要进仓库）
 codes/layouts/*.bak.json

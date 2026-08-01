@@ -2133,7 +2133,7 @@ function negamax(sim, depth, alpha, beta, ply, deadline) {
   return best;
 }
 // 根节点选着：返回 {piece(真实棋子引用), toCol, toRow, clone}；无着返回 null
-function aiChooseMove(side, cfg) {
+async function aiChooseMove(side, cfg) {
   const t0 = Date.now();
   aiNodes = 0;
   aiHistory = new Int32Array(361 * 361); // history 启发式：仅本次选着内有效
@@ -2155,6 +2155,9 @@ function aiChooseMove(side, cfg) {
     for (const prev of scored) {
       if (hurryRequested) { aborted = true; break; } // 当前根着法已跑完并入 layer；停止评估后续根着法
       const mv = prev.mv;
+      // 让出事件循环：搜索期间 UI 可响应——10s 定时器渲染「催一催」、点击事件可落地
+      await new Promise(r => setTimeout(r, 0));
+      if (hurryRequested) { aborted = true; break; } // 让出期间点击了催一催 → 立即停
       try {
         const child = simClone(root);
         const p = child.pieces[mv.idx];
@@ -2819,11 +2822,11 @@ function aiMaybeSchedule() {
     const b = document.getElementById("btn-hurry");
     if (b) { b.hidden = false; b.disabled = false; b.textContent = "催一催"; }
   }, 10000);
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       if (token !== aiToken) return; // 思考期间局面已被新局/悔棋等改变
       if (turn !== aiSide || gameOver || replayMode || studyMode || setupMode) return;
-      const mv = aiChooseMove(aiSide, cfg);
+      const mv = await aiChooseMove(aiSide, cfg); // async：搜索期间每根着法让出事件循环，催一催可中断
       if (token !== aiToken) return;
       if (mv) aiPlayMove(mv);
     } finally {
