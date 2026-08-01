@@ -533,8 +533,8 @@ const COL_LETTERS = "ABCDEFGHJKLMNOPQRST"; // 跳过 I
 const MARGIN = 32, CELL = 32;
 const BOARD_PX = MARGIN * 2 + (SIZE - 1) * CELL; // 逻辑棋盘边长 640：所有绘制/坐标换算均基于此，与 canvas 物理像素解耦
 // 棋子绘制半径(px)与 hover 缩放：放大棋子、悬停可行动棋子时平滑放大
-const STONE_R_SMALL = 11;   // 兵/卒
-const STONE_R_BIG   = 14;   // 武王/分身
+const STONE_R_SMALL = 16.5; // 兵/卒（原 11，整体放大 1.5×）
+const STONE_R_BIG   = 21;   // 武王/分身（原 14，整体放大 1.5×）
 const HOVER_GROW    = 0.12; // 悬停放大比例
 const SEL_RING_R    = 18;   // 选中描边环半径(px)
 const CAP_RING_GAP  = 4;    // 吃子光环超出目标棋子的间隙(px)
@@ -2531,7 +2531,7 @@ function drawPieces() {
                 : isBig ? (isWhite ? "武" : "纣")
                 : (isWhite ? "兵" : "卒");
     ctx.fillStyle = isWhite ? "#2a1a08" : "#eee";
-    ctx.font = (isBig ? "bold " : "") + Math.round((isBig ? 16 : 13) * (1 + HOVER_GROW * hv)) + "px sans-serif";
+    ctx.font = (isBig ? "bold " : "") + Math.round((isBig ? 24 : 19.5) * (1 + HOVER_GROW * hv)) + "px sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(label, x, y);
   }
