@@ -171,7 +171,7 @@
   .cd-opt.sel .cd-sub { color: #d8b86a; }
   .cdd.is-disabled .cdd-trigger { opacity: .4; cursor: default; pointer-events: none; }
 
-/* AI 参数紧凑输入（depth / 限时 秒）：替代原三档下拉 */
+/* AI 参数紧凑输入（难度=depth，1-10）：替代原三档下拉 */
 .cfg-num-row { display: flex; align-items: center; gap: 5px; }
 .num-step {
   flex: 1; display: flex; align-items: center; gap: 3px;
@@ -197,7 +197,6 @@
 }
 .num-inp::-webkit-outer-spin-button,
 .num-inp::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.cfg-unit { font-size: 10px; color: var(--ink-dim); letter-spacing: 1px; flex: 0 0 auto; }
 .cfg-cell.is-disabled .num-step { opacity: .4; pointer-events: none; }
 
 /* 催一催按钮：与 hint 同排，仅 AI 思考时可见 */
@@ -448,20 +447,11 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
         </div>
         <div class="cfg-cell" id="ai-params-cell">
           <div class="cfg-num-row">
-            <label class="cfg-cap" for="ai-depth">depth</label>
+            <label class="cfg-cap" for="ai-depth">难度</label>
             <div class="num-step">
-              <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="depth 减 1">−</button>
-              <input type="number" id="ai-depth" value="4" min="1" max="20" class="num-inp">
-              <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="depth 加 1">+</button>
-            </div>
-          </div>
-          <div class="cfg-num-row">
-            <label class="cfg-cap" for="ai-time">限时</label>
-            <div class="num-step">
-              <button type="button" class="num-btn" data-target="ai-time" data-step="-5" aria-label="限时减 5">−</button>
-              <input type="number" id="ai-time" value="30" min="1" max="300" class="num-inp">
-              <button type="button" class="num-btn" data-target="ai-time" data-step="5" aria-label="限时加 5">+</button>
-              <span class="cfg-unit">秒</span>
+              <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="难度减 1">−</button>
+              <input type="number" id="ai-depth" value="4" min="1" max="10" class="num-inp">
+              <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
             </div>
           </div>
         </div>
@@ -560,7 +550,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
     <h3>悔棋</h3>
     <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
     <h3>AI 对战</h3>
-    <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「AI 参数」含 depth（最大搜索层数 1-20，默认 4）和限时（秒，1-300，默认 30）两个输入框，双人模式下禁用，修改即时生效；「催一催」按钮可在 AI 思考中提前落子（用最近完整层最佳着法）。</p>
+    <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「难度」为 AI 搜索层数（1-10，默认 4，值越大越强越慢），AI 单步上限 1 分钟；思考满 10 秒后出现「催一催」按钮，点击后 AI 尽快以当前最佳着法落子（双人模式下难度禁用）。</p>
     <p>AI 模式下悔棋一次连撤两手（AI 着 + 人类着）；若 AI 尚未应着，则只撤回人类上一步。撤销悔棋对称恢复。</p>
     <h3>开局档位</h3>
     <p>小战 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
@@ -939,7 +929,7 @@ let aiToken = 0;            // 调度令牌：newGame/undo/redo/复盘/摆子 �
 let aiBusy = false;         // AI 思考/落子中（防重入、禁人类交互）
 let hurryRequested = false; // 「催一催」点击后置位；aiChooseMove 在每层/每根着法前检查，honor 后用最近完整层落子
 // AI 参数：depth 最大搜索层数；timeLimitMs 迭代加深软限（超时回退至最近完整层）。
-// 由 #ai-depth / #ai-time 输入框提供，aiMaybeSchedule 调度时读取；叶节点均接静态搜索（吃子链精算）。
+// depth 由 #ai-depth 输入框提供；timeLimitMs 固定 1 分钟上限；叶节点均接静态搜索（吃子链精算）。
 
 let nextId = 1;
 function makeId() { return nextId++; }
@@ -2817,17 +2807,21 @@ function aiMaybeSchedule() {
   const token = ++aiToken;
   aiBusy = true;
   hurryRequested = false;
-  const hurryBtn = document.getElementById("btn-hurry");
-  if (hurryBtn) { hurryBtn.hidden = false; hurryBtn.disabled = false; hurryBtn.textContent = "催一催"; }
+  hideHurryBtn();
   document.getElementById("hint").textContent = "AI 思考中…";
-  // 从 #ai-depth / #ai-time 读取本步参数（夹紧到合法范围）
+  // depth 从 #ai-depth 读取（1-10，默认 4）；限时固定 1 分钟上限
   const depthInp = document.getElementById("ai-depth");
-  const timeInp = document.getElementById("ai-time");
   const cfg = {
-    depth: Math.max(1, Math.min(20, parseInt(depthInp.value, 10) || 4)),
-    timeLimitMs: Math.max(1000, Math.min(300000, (parseInt(timeInp.value, 10) || 30) * 1000)),
+    depth: Math.max(1, Math.min(10, parseInt(depthInp.value, 10) || 4)),
+    timeLimitMs: 60000,
     label: "custom",
   };
+  // 思考满 10 秒才出现「催一催」（令牌防串：本步已被新局/悔棋等作废则不出）
+  setTimeout(() => {
+    if (!aiBusy || token !== aiToken) return;
+    const b = document.getElementById("btn-hurry");
+    if (b) { b.hidden = false; b.disabled = false; b.textContent = "催一催"; }
+  }, 10000);
   setTimeout(() => {
     try {
       if (token !== aiToken) return; // 思考期间局面已被新局/悔棋等改变
@@ -2838,10 +2832,13 @@ function aiMaybeSchedule() {
     } finally {
       aiBusy = false;
       hurryRequested = false;
-      const hb = document.getElementById("btn-hurry");
-      if (hb) hb.hidden = true;
+      hideHurryBtn();
     }
   }, 30); // 让「AI 思考中…」先上屏
+}
+function hideHurryBtn() {
+  const b = document.getElementById("btn-hurry");
+  if (b) b.hidden = true;
 }
 // AI 落子：快照 → 走子 → 结算 → 记谱 → 渲染（与人类落子完全同构，记谱共用 buildRecord）
 function aiPlayMove(mv) {
@@ -2948,7 +2945,8 @@ document.getElementById("btn-hurry").addEventListener("click", (e) => {
   if (!aiBusy) return;
   hurryRequested = true;
   const b = e.currentTarget;
-  b.disabled = true; b.textContent = "催命中…";
+  b.disabled = true; b.textContent = "催促中……";
+  document.getElementById("hint").textContent = "已催促，AI 将以当前最佳着法尽快落子…";
 });
 // 对手切换：写入 aiSide 并以新设置开局；AI 参数仅 AI 模式下可调
 document.getElementById("opponent").addEventListener("change", (e) => {
