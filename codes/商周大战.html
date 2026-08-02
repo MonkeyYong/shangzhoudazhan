@@ -2053,6 +2053,33 @@ function simEval(sim, side) {
     }
     if (best < 99) score += Math.max(0, 12 - best) * 6 + (best <= 2 ? 100 : 0);
   }
+  // 棋子安全 + 攻击机会（合并遍历减少开销）
+  // attacked: 被敌方瞄准；defended: 有己方保护；threatening: 能攻击到敌方子
+  for (const p of sim.pieces) {
+    if (p.dead || p.type === "king") continue;
+    const val = AI_VAL[p.type] || 100;
+    let attacked = false, defended = false, threatening = false;
+    for (const e of sim.pieces) {
+      if (e.dead || e.state === "imprisoned_invincible") continue;
+      const d = Math.max(Math.abs(e.col - p.col), Math.abs(e.row - p.row));
+      if (e.type === "horse" ? d > 3 : d > 2) continue;
+      if (e.side !== p.side) {
+        if (simCanAttack(sim, e, p.col, p.row)) attacked = true;
+        if (!threatening && simCanAttack(sim, p, e.col, e.row)) threatening = true;
+      } else if (e !== p && simCanAttack(sim, e, p.col, p.row)) {
+        defended = true;
+      }
+    }
+    // 防御端：悬子满罚，受攻子轻罚
+    if (attacked) {
+      const penalty = defended ? val * 0.15 : val;
+      if (p.side === side) score -= penalty; else score += penalty;
+    }
+    // 攻击端：能威胁到敌方子 → 奖励（鼓励进攻姿态）
+    if (threatening) {
+      score += (p.side === side) ? 15 : -15;
+    }
+  }
   return score;
 }
 
@@ -2144,7 +2171,7 @@ async function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
   const stand = simEval(sim, side);
   if (stand >= beta) return stand; // stand pat：不吃也不会更差
   if (stand > alpha) alpha = stand;
-  if (qDepth >= 4) return stand; // 吃子链硬上限（连环吃实战罕见超 2 层互吃）
+  if (qDepth >= 6) return stand; // 吃子链硬上限
   const caps = [];
   for (const mv of simGenMoves(sim, side)) {
     if (!mv.capture) continue;
