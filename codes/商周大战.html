@@ -1164,11 +1164,16 @@ function inAnyFriendlyBigRange(soldier) {
   return false;
 }
 
-// 小棋子（兵/马）的理论移动范围（无视阻挡）：马日字步，兵滑行1-2格
+// 小棋子（兵/马）能否到达指定格：马日字步（考虑绊马腿），兵滑行1-2格
 function smallPieceReaches(piece, tc, tr) {
   if (piece.type === "horse") {
     for (const [dc, dr] of KNIGHT_OFFSETS) {
-      if (piece.col + dc === tc && piece.row + dr === tr) return true;
+      if (piece.col + dc !== tc || piece.row + dr !== tr) continue;
+      // 绊马腿：蹩脚方向有子则不能到达
+      const legC = piece.col + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+      const legR = piece.row + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+      if (legC >= 0 && legR >= 0 && legC <= 18 && legR <= 18 && pieceAt(legC, legR)) continue;
+      return true;
     }
     return false;
   }
@@ -1737,11 +1742,16 @@ function simBerserkCheck(sim, moved) {
     k.activelyUnlocked = true;
   }
 }
-// 小棋子（兵/马）能否到达指定格（无视阻挡）：马日字步，兵滑行1-2格
+// 小棋子（兵/马）能否到达指定格：马日字步（考虑绊马腿），兵滑行1-2格
 function simSmallPieceReaches(sim, piece, tc, tr) {
   if (piece.type === "horse") {
     for (const [dc, dr] of KNIGHT_OFFSETS) {
-      if (piece.col + dc === tc && piece.row + dr === tr) return true;
+      if (piece.col + dc !== tc || piece.row + dr !== tr) continue;
+      // 绊马腿：蹩脚方向有子则不能到达
+      const legC = piece.col + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+      const legR = piece.row + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+      if (legC >= 0 && legR >= 0 && legC <= 18 && legR <= 18 && sim.occ[legR * 19 + legC] >= 0) continue;
+      return true;
     }
     return false;
   }
