@@ -2023,13 +2023,17 @@ function simEval(sim, side) {
     if (p.side === side) my += v; else op += v;
   }
   let score = my - op;
-  // 吃子机会：己方子能吃到敌方子 → 直接奖励（距离≤3 的潜在吃子目标）
+  // 吃子机会：己方子能吃到敌方子 → 强奖励
   for (const p of sim.pieces) {
     if (p.dead || p.side !== side || p.type === "king") continue;
     for (const e of sim.pieces) {
       if (e.dead || e.side === side) continue;
       const d = Math.max(Math.abs(p.col - e.col), Math.abs(p.row - e.row));
-      if (d <= 3) { score += 50; break; }
+      if (d <= 3) {
+        const ev = AI_VAL[e.type] || 100; // 潜在吃子价值
+        score += (p.side === side) ? ev * 0.8 : -ev * 0.8; // 80% 的子力值
+        break;
+      }
     }
   }
   return score;
