@@ -1988,9 +1988,9 @@ function simSortMoves(sim, moves, ply) {
     if (mv.capture) {
       const t = simAt(sim, mv.toCol, mv.toRow);
       const base = t ? (AI_VAL[t.type] || 100) : 100;
-      // 王/分身捕获额外加权：作为最高优先级
-      const bonus = (t && (t.type === "king" || t.type === "clone")) ? 100000 : 0;
-      mv.ord = 200000 + base + bonus;
+      // 王/分身捕获额外加权：作为最高优先级（1M 远超任何非吃子着法）
+      const bonus = (t && (t.type === "king" || t.type === "clone")) ? 1000000 : 100000;
+      mv.ord = 1000000 + base + bonus;
     } else if (enc === k1) mv.ord = 150000;
     else if (enc === k2) mv.ord = 140000;
     else mv.ord = aiHistory ? aiHistory[mv.fromIdx * 361 + mv.toIdx] : 0;
