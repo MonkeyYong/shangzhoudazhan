@@ -2093,7 +2093,7 @@ function simEval(sim, side) {
     }
     // 攻击端：能威胁到敌方子 → 奖励（鼓励进攻姿态）
     if (threatening) {
-      score += (p.side === side) ? 30 : -30;
+      score += (p.side === side) ? 300 : -300;
     }
   }
   return score;
