@@ -2005,76 +2005,31 @@ function aiCloneOption(sim, side) {
   for (const p of sim.pieces) if (!p.dead && p.side === side && p.type !== "king" && p.type !== "clone") return 120;
   return 0;
 }
-// 局面评估：返回 side 视角分值（值域远小于 AI_M）
+// 局面评估：纯子力驱动 + 吃子机会奖励
 function simEval(sim, side) {
   const opp = side === "white" ? "black" : "white";
-  let my = 0, op = 0, myMob = 0, opMob = 0, mySoldiers = 0, opSoldiers = 0;
-  let myKing = null, opKing = null;
+  let my = 0, op = 0;
   for (const p of sim.pieces) {
     if (p.dead) continue;
     let v;
-    if (p.type === "soldier" || p.type === "horse") { v = 100; if (p.side === side) mySoldiers++; else opSoldiers++; }
+    if (p.type === "soldier" || p.type === "horse") v = 100;
     else if (p.type === "clone") v = 500;
     else {
-      v = 500;                           // king 本体基础值
+      v = 500;
       if (p.state === "imprisoned_invincible") v -= 200;
-      else if (!p.hasMoved) v += 100;    // 解锁价值：可立即行棋 + 首动解锁分身
+      else if (!p.hasMoved) v += 100;
     }
-    if (p.state === "berserk") v += 200; // 无限射线 + 攻王窗口
+    if (p.state === "berserk") v += 200;
     if (p.side === side) my += v; else op += v;
-    if (p.type === "king" && !p.isClone) { if (p.side === side) myKing = p; else opKing = p; }
-    if (simHasReach(sim, p)) { if (p.side === side) myMob++; else opMob++; }
   }
-  let score = (my - op) + (myMob - opMob) * 2;
-  // 王脆弱项：可杀的王（hasMoved）是攻杀目标——对方脆弱利于我、己方脆弱不利于我。
-  // 权重刻意小于暴走加分：使「暴走解禁对方王」净收益为正（鼓励攻王），但不夸大「可杀」价值
-  // （可杀 ≠ 将杀，且对方王自由后同时获得机动与反扑能力）
-  if (myKing && myKing.hasMoved) score -= 300;
-  if (opKing && opKing.hasMoved) score += 300;
-  // 灭子判负风险：王禁锢且兵 ≤2，距「禁锢+兵全灭=判负」一步之遥
-  if (myKing && myKing.state === "imprisoned_invincible" && mySoldiers <= 2) score -= (3 - mySoldiers) * 150;
-  if (opKing && opKing.state === "imprisoned_invincible" && opSoldiers <= 2) score += (3 - opSoldiers) * 150;
-  score += aiCloneOption(sim, side) - aiCloneOption(sim, opp);
-  // 围攻敌方王
-  if (opKing) {
-    const cov = simCoverage(sim, opKing);
-    score += cov * 200; // 基础覆盖奖励
-    if (opKing.hasMoved) {
-      // 敌方王已解锁（可被吃）→ 全面追杀：覆盖数非线性奖励
-      if (cov >= 2) score += 800;      // 禁锢敌方王 = 巨大优势
-      else if (cov === 1) score += 150; // 差一步就禁锢
-      // 所有己方子向敌方王靠拢（不只是兵）
-      for (const s of sim.pieces) {
-        if (s.dead || s.side !== side || s.type === "king") continue;
-        const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
-        score += Math.max(0, 10 - d) * 40; // 每近1格+40，最多+400
-      }
-    } else {
-      // 敌方王未解锁，布局围堵
-      for (const s of sim.pieces) {
-        if (s.dead || s.side !== side || s.type !== "soldier") continue;
-        const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
-        score += Math.max(0, 12 - d) * 15;
-      }
-    }
-  }
-  // 救王 / 主动解锁潜力：己王解除禁锢是判胜的必要条件（杀光对方王但己王未解锁不判胜），
-  // 故解锁梯度给高权重；兵已入解锁范围（d≤2）= 下一步即可解锁，重赏
-  if (myKing && myKing.state === "imprisoned_invincible") {
-    let best = 99;
-    for (const s of sim.pieces) {
-      if (s.dead || s.side !== side || s.type !== "soldier") continue;
-      const d = Math.max(Math.abs(s.col - myKing.col), Math.abs(s.row - myKing.row));
-      if (d < best) best = d;
-    }
-    if (best < 99) score += Math.max(0, 12 - best) * 6 + (best <= 2 ? 100 : 0);
-  }
-  // 进攻态势：己方非王子靠近敌方王 → 简单距离奖励（O(n)，无 O(n²) 开销）
-  if (opKing && opKing.hasMoved) {
-    for (const p of sim.pieces) {
-      if (p.dead || p.side !== side || p.type === "king") continue;
-      const d = Math.max(Math.abs(p.col - opKing.col), Math.abs(p.row - opKing.row));
-      if (d <= 4) score += (5 - d) * 80; // d=1:+320, d=2:+240, d=3:+160, d=4:+80
+  let score = my - op;
+  // 吃子机会：己方子能吃到敌方子 → 直接奖励（距离≤3 的潜在吃子目标）
+  for (const p of sim.pieces) {
+    if (p.dead || p.side !== side || p.type === "king") continue;
+    for (const e of sim.pieces) {
+      if (e.dead || e.side === side) continue;
+      const d = Math.max(Math.abs(p.col - e.col), Math.abs(p.row - e.row));
+      if (d <= 3) { score += 50; break; }
     }
   }
   return score;
