@@ -2032,13 +2032,27 @@ function simEval(sim, side) {
   if (myKing && myKing.state === "imprisoned_invincible" && mySoldiers <= 2) score -= (3 - mySoldiers) * 150;
   if (opKing && opKing.state === "imprisoned_invincible" && opSoldiers <= 2) score += (3 - opSoldiers) * 150;
   score += aiCloneOption(sim, side) - aiCloneOption(sim, opp);
-  // 围王潜力：己兵→对方王切比雪夫距离（开局距离远，作用域放宽至 12 格）+ 对方王被覆盖数
+  // 围攻敌方王
   if (opKing) {
-    score += simCoverage(sim, opKing) * 50;
-    for (const s of sim.pieces) {
-      if (s.dead || s.side !== side || s.type !== "soldier") continue;
-      const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
-      score += Math.max(0, 12 - d) * 5;
+    const cov = simCoverage(sim, opKing);
+    score += cov * 80; // 基础覆盖奖励
+    if (opKing.hasMoved) {
+      // 敌方王已解锁（可被吃）→ 全面追杀：覆盖数非线性奖励
+      if (cov >= 2) score += 300;      // 禁锢敌方王 = 巨大优势
+      else if (cov === 1) score += 50; // 差一步就禁锢
+      // 所有己方子向敌方王靠拢（不只是兵）
+      for (const s of sim.pieces) {
+        if (s.dead || s.side !== side || s.type === "king") continue;
+        const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
+        score += Math.max(0, 10 - d) * 15; // 每近1格+15，最多+150
+      }
+    } else {
+      // 敌方王未解锁，布局围堵
+      for (const s of sim.pieces) {
+        if (s.dead || s.side !== side || s.type !== "soldier") continue;
+        const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
+        score += Math.max(0, 12 - d) * 5;
+      }
     }
   }
   // 救王 / 主动解锁潜力：己王解除禁锢是判胜的必要条件（杀光对方王但己王未解锁不判胜），
