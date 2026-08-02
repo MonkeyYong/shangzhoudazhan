@@ -530,7 +530,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
   <!-- 规则面板：独立列于右面板右侧，默认隐藏，由 #btn-rules 切换 -->
   <aside id="rules">
     <h3>移动</h3>
-    <p>兵/卒：横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。马：走日字步（横竖各 2+1 或 1+2，共 8 个落点），不阻挡。武王/分身：每回合仅可走 1 格（削弱逃跑）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
+    <p>兵/卒：横、竖、斜各方向走 1 格或 2 格（斜 2 格含田字步）。马：走日字步（横竖各 2+1 或 1+2，共 8 个落点），蹩脚方向（主移动方向 1 格处）有子则不能走（绊马腿）。武王/分身：每回合仅可走 1 格（削弱逃跑）。移动路径不能穿过敌方棋子，可穿过己方棋子。目标格为空则落子，为敌方则吃子并停止。</p>
     <h3>禁锢与解锁</h3>
     <p>武王被 ≥2 名敌方棋子覆盖即处禁锢（无敌不可动、不可被吃）。覆盖按各棋子走法判定：兵/卒按 1-2 格滑行，马按日字步，武王/分身按 1 格（暴走走射线）。</p>
     <p>被动解锁：覆盖者 &lt;2 则自动解除；未移动时若再被 ≥2 覆盖则重新禁锢。</p>
@@ -1030,6 +1030,10 @@ function knightReach(piece) {
   for (const [dc, dr] of KNIGHT_OFFSETS) {
     const nc = piece.col + dc, nr = piece.row + dr;
     if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+    // 绊马腿：蹩脚方向（主移动方向1格处）有子则不能走
+    const legC = piece.col + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+    const legR = piece.row + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+    if (legC >= 0 && legR >= 0 && legC <= 18 && legR <= 18 && pieceAt(legC, legR)) continue;
     const occ = pieceAt(nc, nr);
     if (!occ) moves.push({ col: nc, row: nr, capture: false });
     else if (occ.side !== piece.side) moves.push({ col: nc, row: nr, capture: true });
@@ -1985,6 +1989,10 @@ function simGenMoves(sim, side) {
       for (const [dc, dr] of KNIGHT_OFFSETS) {
         const nc = p.col + dc, nr = p.row + dr;
         if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+        // 绊马腿：蹩脚方向有子则不能走
+        const legC = p.col + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+        const legR = p.row + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+        if (legC >= 0 && legR >= 0 && legC <= 18 && legR <= 18 && sim.occ[legR * 19 + legC] >= 0) continue;
         const i = sim.occ[nr * 19 + nc];
         if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: false }); continue; }
         const t = sim.pieces[i];
