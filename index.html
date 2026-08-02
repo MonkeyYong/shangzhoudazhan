@@ -1842,6 +1842,100 @@ function simSettle(sim, piece, res, cloneDecision) {
   return null;
 }
 
+/* ----- Make/Unmake：原地修改替代 simClone，消除每节点的对象分配 ----- */
+// 保存所有 king/clone 的可变状态快照（state/hasMoved/activelyUnlocked）
+function _saveKingStates(sim) {
+  const ks = [];
+  for (const k of sim.pieces) {
+    if (!k.dead && (k.type === "king" || k.type === "clone"))
+      ks.push({ idx: k.idx, state: k.state, hasMoved: k.hasMoved, activelyUnlocked: k.activelyUnlocked });
+  }
+  return ks;
+}
+function _restoreKingStates(sim, ks) {
+  for (const s of ks) { const k = sim.pieces[s.idx]; k.state = s.state; k.hasMoved = s.hasMoved; k.activelyUnlocked = s.activelyUnlocked; }
+}
+
+// 原地执行 simDoMove + 记录撤销信息；返回 { captured, offered, undo }
+function simMakeMove(sim, mv) {
+  const piece = sim.pieces[mv.idx];
+  const undo = {
+    idx: mv.idx, col: piece.col, row: piece.row,
+    state: piece.state, hasMoved: piece.hasMoved, activelyUnlocked: piece.activelyUnlocked,
+    capturedIdx: -1, occTo: sim.occ[mv.toRow * 19 + mv.toCol],
+    lostClone: { ...sim.lostClone }, cloneUnlocked: { ...sim.cloneUnlocked },
+    kings: _saveKingStates(sim),
+  };
+  // 吃子
+  let captured = null;
+  const ti = undo.occTo;
+  if (ti >= 0) {
+    const t = sim.pieces[ti];
+    if (!t.dead && t.side !== piece.side) { captured = t; t.dead = true; undo.capturedIdx = ti; }
+  }
+  // 移动
+  sim.occ[piece.row * 19 + piece.col] = -1;
+  piece.col = mv.toCol; piece.row = mv.toRow;
+  sim.occ[mv.toRow * 19 + mv.toCol] = piece.idx;
+  // 武王首动
+  if (piece.type === "king" && !piece.isClone && !piece.hasMoved) {
+    piece.hasMoved = true; sim.cloneUnlocked[piece.side] = true;
+  }
+  simBerserkCheck(sim, piece);
+  // 主动解锁
+  for (const k of sim.pieces) {
+    if (k.dead || k.side !== piece.side || k.type !== "king" || k.isClone) continue;
+    if (k.state === "imprisoned_invincible" && simInTheoryRange(k, mv.toCol, mv.toRow)) k.activelyUnlocked = true;
+  }
+  const offered = simCloneOffered(sim, piece);
+  simKingStates(sim);
+  return { captured, offered, undo };
+}
+
+// 撤销 simMakeMove
+function simUnmakeMove(sim, u) {
+  const piece = sim.pieces[u.idx];
+  sim.occ[piece.row * 19 + piece.col] = u.occTo;
+  piece.col = u.col; piece.row = u.row;
+  sim.occ[u.row * 19 + u.col] = piece.idx;
+  if (u.capturedIdx >= 0) sim.pieces[u.capturedIdx].dead = false;
+  piece.state = u.state; piece.hasMoved = u.hasMoved; piece.activelyUnlocked = u.activelyUnlocked;
+  _restoreKingStates(sim, u.kings);
+  sim.lostClone = u.lostClone; sim.cloneUnlocked = u.cloneUnlocked;
+}
+
+// 原地执行 simSettle + 记录撤销信息；返回 { result, undo }
+function simMakeSettle(sim, pieceIdx, cloneDecision, offered) {
+  const piece = sim.pieces[pieceIdx];
+  const undo = {
+    turn: sim.turn, lostClone: { ...sim.lostClone },
+    kings: _saveKingStates(sim),
+    candIdx: -1, candType: null, candIsClone: false, candState: null,
+  };
+  if (offered && cloneDecision && simBigCount(sim, piece.side) < 2) {
+    const s = simFirstCloneCand(sim, piece);
+    if (s) {
+      undo.candIdx = s.idx; undo.candType = s.type; undo.candIsClone = s.isClone; undo.candState = s.state;
+      s.type = "clone"; s.isClone = true; s.state = "free";
+      simBerserkCheck(sim, s); simKingStates(sim);
+    }
+  }
+  const w = simWinner(sim);
+  sim.turn = sim.turn === "white" ? "black" : "white";
+  let result = w;
+  if (!w && !simHasAnyMove(sim, sim.turn)) result = sim.turn === "white" ? "black" : "white";
+  return { result, undo };
+}
+
+// 撤销 simMakeSettle
+function simUnmakeSettle(sim, u) {
+  sim.turn = u.turn; sim.lostClone = u.lostClone;
+  _restoreKingStates(sim, u.kings);
+  if (u.candIdx >= 0) {
+    const s = sim.pieces[u.candIdx]; s.type = u.candType; s.isClone = u.candIsClone; s.state = u.candState;
+  }
+}
+
 // 着法生成（内联方向扫描，无中间数组）：{idx, fromIdx, toCol, toRow, capture}
 // 规则等价 reachableCells+legalMoves（L741/L764）：不穿敌、吃敌后停、穿己方、不吃无敌王
 function simGenMoves(sim, side) {
@@ -1855,12 +1949,12 @@ function simGenMoves(sim, side) {
         const nc = p.col + dc, nr = p.row + dr;
         if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
         const i = sim.occ[nr * 19 + nc];
-        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: false }); continue; }
         const t = sim.pieces[i];
-        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: false }); continue; }
         if (t.side === side) continue;            // 己方
         if (t.type === "king" && !t.hasMoved) continue; // 无敌王：不可吃
-        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: true });
+        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: true });
       }
       continue;
     }
@@ -1872,12 +1966,12 @@ function simGenMoves(sim, side) {
         const nc = p.col + dc * s, nr = p.row + dr * s;
         if (nc < 0 || nc > 18 || nr < 0 || nr > 18) break;
         const i = sim.occ[nr * 19 + nc];
-        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (i < 0) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: false }); continue; }
         const t = sim.pieces[i];
-        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: false }); continue; }
+        if (t.dead) { moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: false }); continue; }
         if (t.side === side) continue;            // 己方可穿过
         if (t.type === "king" && !t.hasMoved) break; // 敌方无敌王：不可吃、阻挡
-        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, capture: true });
+        moves.push({ idx: p.idx, fromIdx, toCol: nc, toRow: nr, toIdx: nr * 19 + nc, capture: true });
         break; // 吃敌后停
       }
     }
@@ -1988,7 +2082,6 @@ let ZT1 = 0, ZT2 = 0;                                              // 回合方�
 })();
 const Z_TYPE = { soldier: 0, clone: 1, king: 2, horse: 3 };
 const Z_STATE = { imprisoned_invincible: 0, free: 1, berserk: 2 };
-const _HASH = { h1: 0, h2: 0 };
 // 全量哈希（O(P)，每节点一次；增量维护易错，性能已够）
 function simHash(sim) {
   let h1 = sim.turn === "black" ? ZT1 : 0;
@@ -2003,8 +2096,7 @@ function simHash(sim) {
   const f = (sim.lostClone.white ? 1 : 0) | (sim.lostClone.black ? 2 : 0)
           | (sim.cloneUnlocked.white ? 4 : 0) | (sim.cloneUnlocked.black ? 8 : 0);
   h1 ^= ZF1[f]; h2 ^= ZF2[f];
-  _HASH.h1 = h1; _HASH.h2 = h2;
-  return _HASH;
+  return { h1, h2 };
 }
 // killer 启发：每 ply 两个引发截断的静默着法（ply 上限 64 足够）
 const KILLERS = new Int32Array(64 * 2);
@@ -2015,22 +2107,30 @@ function clearTTState() { // 每次选着重置（TT 表本身保留，跨层/�
 
 // 单子节点分值（父节点/走子方视角）；clone 提示展开 true/false 两分支取优
 async function aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline) {
-  const child = simClone(sim);
-  const p = child.pieces[mv.idx];
-  const res = simDoMove(child, p, mv.toCol, mv.toRow);
-  const rec = async (c, winner, a) => {
+  const { undo: moveUndo, offered } = simMakeMove(sim, mv);
+  const rec = async (winner, a) => {
     let s;
-    if (winner) s = (winner === c.turn) ? (AI_M - ply) : -(AI_M - ply);
-    else s = -(await negamax(c, depth - 1, -beta, -a, ply + 1, deadline));
-    return -s; // 折算为父方视角
+    if (winner) s = (winner === sim.turn) ? (AI_M - ply) : -(AI_M - ply);
+    else s = -(await negamax(sim, depth - 1, -beta, -a, ply + 1, deadline));
+    return -s;
   };
-  if (!res.offered) return await rec(child, simSettle(child, p, res, false), alpha);
-  const c1 = simClone(child);
-  const s1 = await rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
-  if (s1 >= beta) return s1; // 变身分支已触发截断，免搜不变身分支
-  const c0 = simClone(child);
-  const s0 = await rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
-  return Math.max(s1, s0);
+  let score;
+  if (!offered) {
+    const su = simMakeSettle(sim, mv.idx, false, false);
+    score = await rec(su.result, alpha);
+    simUnmakeSettle(sim, su.undo);
+  } else {
+    const su1 = simMakeSettle(sim, mv.idx, true, true);
+    const s1 = await rec(su1.result, alpha);
+    simUnmakeSettle(sim, su1.undo);
+    if (s1 >= beta) { simUnmakeMove(sim, moveUndo); return s1; }
+    const su0 = simMakeSettle(sim, mv.idx, false, true);
+    const s0 = await rec(su0.result, Math.max(alpha, s1));
+    simUnmakeSettle(sim, su0.undo);
+    score = Math.max(s1, s0);
+  }
+  simUnmakeMove(sim, moveUndo);
+  return score;
 }
 // 静态搜索（quiescence）：叶节点只延伸吃子链至安静局面，消除水平线效应。
 // delta 裁剪：吃子收益上限（被吃子价值+margin）仍够不到 α 则跳过；qDepth 为搜索内部层数（与主搜深度无关）。
@@ -2054,13 +2154,13 @@ async function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
   }
   simSortMoves(sim, caps, -1); // MVV-LVA 排序提高 α-β 剪枝率（-1：静态搜索不用 killer）
   for (const mv of caps) {
-    const child = simClone(sim);
-    const p = child.pieces[mv.idx];
-    const res = simDoMove(child, p, mv.toCol, mv.toRow);
-    const w = simSettle(child, p, res, false); // 静态搜索内不转化分身（简化）
-    const sc = w
-      ? (w === child.turn ? -(AI_M - ply) : (AI_M - ply))
-      : -(await qsearch(child, -beta, -alpha, ply + 1, deadline, qDepth + 1));
+    const { undo: mu, offered } = simMakeMove(sim, mv);
+    const su = simMakeSettle(sim, mv.idx, false, offered);
+    const w = su.result;
+    const sc = w ? (w === sim.turn ? -(AI_M - ply) : (AI_M - ply))
+                 : -(await qsearch(sim, -beta, -alpha, ply + 1, deadline, qDepth + 1));
+    simUnmakeSettle(sim, su.undo);
+    simUnmakeMove(sim, mu);
     if (sc > alpha) alpha = sc;
     if (alpha >= beta) break;
   }
@@ -2165,25 +2265,26 @@ async function aiChooseMove(side, cfg) {
       await new Promise(r => setTimeout(r, 0));
       if (hurryRequested) { aborted = true; break; } // 让出期间点击了催一催 → 立即停
       try {
-        const child = simClone(root);
-        const p = child.pieces[mv.idx];
-        const res = simDoMove(child, p, mv.toCol, mv.toRow);
-        const rec = async (c, winner, a) => {
-          if (winner) return winner === c.turn ? -(AI_M - 1) : (AI_M - 1);
-          return -(await negamax(c, d - 1, -Infinity, -a, 1, deadline));
+        const { undo: moveUndo, offered } = simMakeMove(root, mv);
+        const rec = async (winner, a) => {
+          if (winner) return winner === root.turn ? -(AI_M - 1) : (AI_M - 1);
+          return -(await negamax(root, d - 1, -Infinity, -a, 1, deadline));
         };
         let score, clone = false;
-        if (!res.offered) {
-          score = await rec(child, simSettle(child, p, res, false), alpha);
+        if (!offered) {
+          const su = simMakeSettle(root, mv.idx, false, false);
+          score = await rec(su.result, alpha);
+          simUnmakeSettle(root, su.undo);
         } else {
-          const c1 = simClone(child);
-          const s1 = await rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
-          const c0 = simClone(child);
-          const s0 = await rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
-          clone = s1 >= s0;
-          score = Math.max(s1, s0);
+          const su1 = simMakeSettle(root, mv.idx, true, true);
+          const s1 = await rec(su1.result, alpha);
+          simUnmakeSettle(root, su1.undo);
+          const su0 = simMakeSettle(root, mv.idx, false, true);
+          const s0 = await rec(su0.result, Math.max(alpha, s1));
+          simUnmakeSettle(root, su0.undo);
+          clone = s1 >= s0; score = Math.max(s1, s0);
         }
-        // exact：score 抬高了 α → 真值；否则为 fail-low 上界（不可参与同分随机）
+        simUnmakeMove(root, moveUndo);
         layer.push({ mv, score, clone, exact: score > alpha });
         if (score > alpha) alpha = score;
       } catch (e) {
