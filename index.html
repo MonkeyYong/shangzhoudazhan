@@ -1566,7 +1566,7 @@ function studyUndo() {
  * ========================================================= */
 const AI_M = 1000000;                    // 终局分值基数（远大于评估值域）
 const AI_TIMEOUT = { aiTimeout: true };  // 迭代加深超时哨兵
-const AI_VAL = { soldier: 100, clone: 350, king: 2000, horse: 300 }; // MVV-LVA 排序用子力值
+const AI_VAL = { soldier: 100, clone: 500, king: 500, horse: 100 }; // MVV-LVA 排序用子力值
 let aiNodes = 0;                         // 本次搜索展开节点数（调试用）
 let aiHistory = null;                    // history 启发式表 [fromIdx*361+toIdx]：每次选着重置
 
@@ -2010,15 +2010,14 @@ function simEval(sim, side) {
   for (const p of sim.pieces) {
     if (p.dead) continue;
     let v;
-    if (p.type === "soldier") { v = 100; if (p.side === side) mySoldiers++; else opSoldiers++; }
-    else if (p.type === "clone") v = 350;
+    if (p.type === "soldier" || p.type === "horse") { v = 100; if (p.side === side) mySoldiers++; else opSoldiers++; }
+    else if (p.type === "clone") v = 500;
     else {
-      v = 1500;                          // king 本体基础值（王亡=决定性）
-      // 王的战略状态：禁锢=停摆+灭子判负风险；已解锁（可动且仍无敌）=最佳态
-      if (p.state === "imprisoned_invincible") v -= 500;
-      else if (!p.hasMoved) v += 200;    // 解锁价值：可立即行棋 + 首动解锁分身
+      v = 500;                           // king 本体基础值
+      if (p.state === "imprisoned_invincible") v -= 200;
+      else if (!p.hasMoved) v += 100;    // 解锁价值：可立即行棋 + 首动解锁分身
     }
-    if (p.state === "berserk") v += 400; // 无限射线 + 攻王窗口
+    if (p.state === "berserk") v += 200; // 无限射线 + 攻王窗口
     if (p.side === side) my += v; else op += v;
     if (p.type === "king" && !p.isClone) { if (p.side === side) myKing = p; else opKing = p; }
     if (simHasReach(sim, p)) { if (p.side === side) myMob++; else opMob++; }
