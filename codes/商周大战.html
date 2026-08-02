@@ -2086,9 +2086,9 @@ function simEval(sim, side) {
         defended = true;
       }
     }
-    // 防御端：悬子满罚，受攻子轻罚
+    // 防御端：悬子轻罚（让 AI 敢于交换），受攻子微罚
     if (attacked) {
-      const penalty = defended ? val * 0.15 : val;
+      const penalty = defended ? val * 0.05 : val * 0.3;
       if (p.side === side) score -= penalty; else score += penalty;
     }
     // 攻击端：能威胁到敌方子 → 奖励（鼓励进攻姿态）
