@@ -448,7 +448,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
           <label class="cfg-cap" for="ai-depth">难度</label>
           <div class="num-step">
             <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="难度减 1">−</button>
-            <input type="number" id="ai-depth" value="4" min="1" max="10" class="num-inp">
+            <input type="number" id="ai-depth" value="6" min="1" max="10" class="num-inp">
             <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
           </div>
         </div>
@@ -2038,23 +2038,23 @@ function simEval(sim, side) {
   // 围攻敌方王
   if (opKing) {
     const cov = simCoverage(sim, opKing);
-    score += cov * 80; // 基础覆盖奖励
+    score += cov * 200; // 基础覆盖奖励
     if (opKing.hasMoved) {
       // 敌方王已解锁（可被吃）→ 全面追杀：覆盖数非线性奖励
-      if (cov >= 2) score += 300;      // 禁锢敌方王 = 巨大优势
-      else if (cov === 1) score += 50; // 差一步就禁锢
+      if (cov >= 2) score += 800;      // 禁锢敌方王 = 巨大优势
+      else if (cov === 1) score += 150; // 差一步就禁锢
       // 所有己方子向敌方王靠拢（不只是兵）
       for (const s of sim.pieces) {
         if (s.dead || s.side !== side || s.type === "king") continue;
         const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
-        score += Math.max(0, 10 - d) * 15; // 每近1格+15，最多+150
+        score += Math.max(0, 10 - d) * 40; // 每近1格+40，最多+400
       }
     } else {
       // 敌方王未解锁，布局围堵
       for (const s of sim.pieces) {
         if (s.dead || s.side !== side || s.type !== "soldier") continue;
         const d = Math.max(Math.abs(s.col - opKing.col), Math.abs(s.row - opKing.row));
-        score += Math.max(0, 12 - d) * 5;
+        score += Math.max(0, 12 - d) * 15;
       }
     }
   }
