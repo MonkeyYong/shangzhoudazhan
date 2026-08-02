@@ -521,7 +521,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
       <div class="sect-title">棋 谱</div>
       <div class="hint-row">
         <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
-        <button type="button" id="btn-hurry" class="btn-hurry" hidden>催一催</button>
+        <button type="button" id="btn-hurry" class="btn-hurry" style="display:none">催一催</button>
       </div>
       <div id="movelist"></div>
     </section>
@@ -2036,7 +2036,7 @@ function aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline) {
 // delta 裁剪：吃子收益上限（被吃子价值+margin）仍够不到 α 则跳过；qDepth 为搜索内部层数（与主搜深度无关）。
 function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
   aiNodes++;
-  if (deadline && (aiNodes & 1023) === 0 && Date.now() > deadline) throw AI_TIMEOUT;
+  if ((aiNodes & 1023) === 0 && (hurryRequested || (deadline && Date.now() > deadline))) throw AI_TIMEOUT;
   const side = sim.turn;
   const stand = simEval(sim, side);
   if (stand >= beta) return stand; // stand pat：不吃也不会更差
@@ -2066,7 +2066,7 @@ function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
 // negamax + α-β：返回 sim.turn（走子方）视角分值。ply=距根着数；deadline=0 不限时
 function negamax(sim, depth, alpha, beta, ply, deadline) {
   aiNodes++;
-  if (deadline && (aiNodes & 1023) === 0 && Date.now() > deadline) throw AI_TIMEOUT;
+  if ((aiNodes & 1023) === 0 && (hurryRequested || (deadline && Date.now() > deadline))) throw AI_TIMEOUT;
   const side = sim.turn;
   // 置换表探测：命中且深度足够 → 按 flag 直接返回；未命中也取 PV 着法用于排序
   const h = simHash(sim);
@@ -2820,7 +2820,7 @@ function aiMaybeSchedule() {
   setTimeout(() => {
     if (!aiBusy || token !== aiToken) return;
     const b = document.getElementById("btn-hurry");
-    if (b) { b.hidden = false; b.disabled = false; b.textContent = "催一催"; }
+    if (b) { b.style.display = ''; b.disabled = false; b.textContent = "催一催"; }
   }, 10000);
   setTimeout(async () => {
     try {
@@ -2838,7 +2838,7 @@ function aiMaybeSchedule() {
 }
 function hideHurryBtn() {
   const b = document.getElementById("btn-hurry");
-  if (b) b.hidden = true;
+  if (b) b.style.display = 'none';
 }
 // AI 落子：快照 → 走子 → 结算 → 记谱 → 渲染（与人类落子完全同构，记谱共用 buildRecord）
 function aiPlayMove(mv) {
@@ -2945,7 +2945,7 @@ document.getElementById("btn-hurry").addEventListener("click", (e) => {
   if (!aiBusy) return;
   hurryRequested = true;
   const b = e.currentTarget;
-  b.disabled = true; b.textContent = "催促中……";
+  b.style.display = 'none';
   document.getElementById("hint").textContent = "已催促，AI 将以当前最佳着法尽快落子…";
 });
 // 对手切换：写入 aiSide 并以新设置开局；AI 参数仅 AI 模式下可调

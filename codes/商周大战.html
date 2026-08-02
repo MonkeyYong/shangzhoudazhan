@@ -430,8 +430,8 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
           <label class="cfg-cap" for="opponent">对手</label>
           <div class="cdd cdd-slim" id="opponent-dd">
             <select id="opponent" aria-hidden="true" tabindex="-1">
-              <option value="human" selected>双人对弈</option>
-              <option value="ai-black">AI 执黑</option>
+              <option value="human">双人对弈</option>
+              <option value="ai-black" selected>AI 执黑</option>
               <option value="ai-white">AI 执白</option>
             </select>
             <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
@@ -521,7 +521,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
       <div class="sect-title">棋 谱</div>
       <div class="hint-row">
         <div id="hint">白方先行。点击己方棋子选择，再点击高亮格落子。</div>
-        <button type="button" id="btn-hurry" class="btn-hurry" hidden>催一催</button>
+        <button type="button" id="btn-hurry" class="btn-hurry" style="display:none">催一催</button>
       </div>
       <div id="movelist"></div>
     </section>
@@ -547,7 +547,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
     <h3>悔棋</h3>
     <p>点击"悔棋"可撤回上一步行棋（含吃子、分身、终局）；再点"撤销悔棋"可恢复。新动作会清空撤销栈。</p>
     <h3>AI 对战</h3>
-    <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「难度」为 AI 搜索层数（1-10，默认 4，值越大越强越慢），AI 单步上限 1 分钟；思考满 10 秒后出现「催一催」按钮，点击后 AI 尽快以当前最佳着法落子（双人模式下难度禁用）。</p>
+    <p>「对手」可选双人对弈 / AI 执黑 / AI 执白（AI 执白即 AI 先手），切换自动开局；「难度」为 AI 搜索层数（1-10，默认 4，值越大越强越慢），AI 单步上限 1 分钟；思考满 5 秒后出现「催一催」按钮，点击后 AI 尽快以当前最佳着法落子（双人模式下难度禁用）。</p>
     <p>AI 模式下悔棋一次连撤两手（AI 着 + 人类着）；若 AI 尚未应着，则只撤回人类上一步。撤销悔棋对称恢复。</p>
     <h3>开局档位</h3>
     <p>小战 14 子 / 大战 22 子（默认）/ 决战 34 子，切换档位自动新局。自定义阵容经「摆子」校验开下后存入本浏览器，此后同内置档位直接切换使用。</p>
@@ -2014,29 +2014,32 @@ function clearTTState() { // 每次选着重置（TT 表本身保留，跨层/�
 }
 
 // 单子节点分值（父节点/走子方视角）；clone 提示展开 true/false 两分支取优
-function aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline) {
+async function aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline) {
   const child = simClone(sim);
   const p = child.pieces[mv.idx];
   const res = simDoMove(child, p, mv.toCol, mv.toRow);
-  const rec = (c, winner, a) => {
+  const rec = async (c, winner, a) => {
     let s;
     if (winner) s = (winner === c.turn) ? (AI_M - ply) : -(AI_M - ply);
-    else s = negamax(c, depth - 1, -beta, -a, ply + 1, deadline);
+    else s = -(await negamax(c, depth - 1, -beta, -a, ply + 1, deadline));
     return -s; // 折算为父方视角
   };
-  if (!res.offered) return rec(child, simSettle(child, p, res, false), alpha);
+  if (!res.offered) return await rec(child, simSettle(child, p, res, false), alpha);
   const c1 = simClone(child);
-  const s1 = rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
+  const s1 = await rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
   if (s1 >= beta) return s1; // 变身分支已触发截断，免搜不变身分支
   const c0 = simClone(child);
-  const s0 = rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
+  const s0 = await rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
   return Math.max(s1, s0);
 }
 // 静态搜索（quiescence）：叶节点只延伸吃子链至安静局面，消除水平线效应。
 // delta 裁剪：吃子收益上限（被吃子价值+margin）仍够不到 α 则跳过；qDepth 为搜索内部层数（与主搜深度无关）。
-function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
+async function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
   aiNodes++;
-  if (deadline && (aiNodes & 1023) === 0 && Date.now() > deadline) throw AI_TIMEOUT;
+  if ((aiNodes & 1023) === 0) {
+    if (hurryRequested || (deadline && Date.now() > deadline)) throw AI_TIMEOUT;
+    await new Promise(r => setTimeout(r, 0)); // 让出事件循环：催一催按钮/定时器/UI 更新可执行
+  }
   const side = sim.turn;
   const stand = simEval(sim, side);
   if (stand >= beta) return stand; // stand pat：不吃也不会更差
@@ -2057,16 +2060,19 @@ function qsearch(sim, alpha, beta, ply, deadline, qDepth) {
     const w = simSettle(child, p, res, false); // 静态搜索内不转化分身（简化）
     const sc = w
       ? (w === child.turn ? -(AI_M - ply) : (AI_M - ply))
-      : -qsearch(child, -beta, -alpha, ply + 1, deadline, qDepth + 1);
+      : -(await qsearch(child, -beta, -alpha, ply + 1, deadline, qDepth + 1));
     if (sc > alpha) alpha = sc;
     if (alpha >= beta) break;
   }
   return alpha;
 }
 // negamax + α-β：返回 sim.turn（走子方）视角分值。ply=距根着数；deadline=0 不限时
-function negamax(sim, depth, alpha, beta, ply, deadline) {
+async function negamax(sim, depth, alpha, beta, ply, deadline) {
   aiNodes++;
-  if (deadline && (aiNodes & 1023) === 0 && Date.now() > deadline) throw AI_TIMEOUT;
+  if ((aiNodes & 1023) === 0) {
+    if (hurryRequested || (deadline && Date.now() > deadline)) throw AI_TIMEOUT;
+    await new Promise(r => setTimeout(r, 0)); // 让出事件循环：催一催按钮/定时器/UI 更新可执行
+  }
   const side = sim.turn;
   // 置换表探测：命中且深度足够 → 按 flag 直接返回；未命中也取 PV 着法用于排序
   const h = simHash(sim);
@@ -2084,7 +2090,7 @@ function negamax(sim, depth, alpha, beta, ply, deadline) {
   const alpha0 = alpha;
   const moves = simGenMoves(sim, side);
   if (moves.length === 0) return -(AI_M - ply); // 无合法行动 → 停棋负
-  if (depth <= 0) return qsearch(sim, alpha, beta, ply, deadline, 0);
+  if (depth <= 0) return await qsearch(sim, alpha, beta, ply, deadline, 0);
   // RFP（静态空着裁剪）：让对手 margin×depth 优势后静态评估仍超 β → 剪枝（根附近不裁）
   let staticEval = 0;
   if (depth <= 2 && ply > 2) {
@@ -2105,10 +2111,10 @@ function negamax(sim, depth, alpha, beta, ply, deadline) {
     let sc;
     // LMR：深层节点靠后的静默着法先减一层搜索；若可能抬高 α 再全深度重搜
     if (!mv.capture && depth >= 3 && i >= 4) {
-      sc = aiMoveScore(sim, mv, depth - 1, alpha, beta, ply, deadline);
-      if (sc > alpha) sc = aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline);
+      sc = await aiMoveScore(sim, mv, depth - 1, alpha, beta, ply, deadline);
+      if (sc > alpha) sc = await aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline);
     } else {
-      sc = aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline);
+      sc = await aiMoveScore(sim, mv, depth, alpha, beta, ply, deadline);
     }
     if (sc > best) { best = sc; bestEnc = mv.enc; }
     if (best > alpha) alpha = best;
@@ -2162,18 +2168,18 @@ async function aiChooseMove(side, cfg) {
         const child = simClone(root);
         const p = child.pieces[mv.idx];
         const res = simDoMove(child, p, mv.toCol, mv.toRow);
-        const rec = (c, winner, a) => {
+        const rec = async (c, winner, a) => {
           if (winner) return winner === c.turn ? -(AI_M - 1) : (AI_M - 1);
-          return -negamax(c, d - 1, -Infinity, -a, 1, deadline);
+          return -(await negamax(c, d - 1, -Infinity, -a, 1, deadline));
         };
         let score, clone = false;
         if (!res.offered) {
-          score = rec(child, simSettle(child, p, res, false), alpha);
+          score = await rec(child, simSettle(child, p, res, false), alpha);
         } else {
           const c1 = simClone(child);
-          const s1 = rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
+          const s1 = await rec(c1, simSettle(c1, c1.pieces[mv.idx], res, true), alpha);
           const c0 = simClone(child);
-          const s0 = rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
+          const s0 = await rec(c0, simSettle(c0, c0.pieces[mv.idx], res, false), Math.max(alpha, s1));
           clone = s1 >= s0;
           score = Math.max(s1, s0);
         }
@@ -2816,12 +2822,12 @@ function aiMaybeSchedule() {
     timeLimitMs: 60000,
     label: "custom",
   };
-  // 思考满 10 秒才出现「催一催」（令牌防串：本步已被新局/悔棋等作废则不出）
+  // 思考满 5 秒才出现「催一催」（令牌防串：本步已被新局/悔棋等作废则不出）
   setTimeout(() => {
     if (!aiBusy || token !== aiToken) return;
     const b = document.getElementById("btn-hurry");
-    if (b) { b.hidden = false; b.disabled = false; b.textContent = "催一催"; }
-  }, 10000);
+    if (b) { b.style.display = ''; b.disabled = false; b.textContent = "催一催"; }
+  }, 5000);
   setTimeout(async () => {
     try {
       if (token !== aiToken) return; // 思考期间局面已被新局/悔棋等改变
@@ -2838,7 +2844,7 @@ function aiMaybeSchedule() {
 }
 function hideHurryBtn() {
   const b = document.getElementById("btn-hurry");
-  if (b) b.hidden = true;
+  if (b) b.style.display = 'none';
 }
 // AI 落子：快照 → 走子 → 结算 → 记谱 → 渲染（与人类落子完全同构，记谱共用 buildRecord）
 function aiPlayMove(mv) {
@@ -2945,7 +2951,7 @@ document.getElementById("btn-hurry").addEventListener("click", (e) => {
   if (!aiBusy) return;
   hurryRequested = true;
   const b = e.currentTarget;
-  b.disabled = true; b.textContent = "催促中……";
+  b.style.display = 'none';
   document.getElementById("hint").textContent = "已催促，AI 将以当前最佳着法尽快落子…";
 });
 // 对手切换：写入 aiSide 并以新设置开局；AI 参数仅 AI 模式下可调
@@ -2954,7 +2960,15 @@ document.getElementById("opponent").addEventListener("change", (e) => {
   aiParamsCell.classList.toggle("is-disabled", !aiSide);
   newGame();
 });
-aiParamsCell.classList.add("is-disabled"); // 默认双人对弈，AI 参数禁用
+// 初始同步：按默认对手设置 aiSide 与难度可用性
+(function() {
+  const initOpp = document.getElementById("opponent").value;
+  if (initOpp === "ai-black" || initOpp === "ai-white") {
+    aiSide = initOpp === "ai-black" ? "black" : "white";
+  } else {
+    aiParamsCell.classList.add("is-disabled");
+  }
+})();
 
 /* ----- 摆子模式接线 ----- */
 document.getElementById("btn-edit-setup").addEventListener("click", enterSetup);
