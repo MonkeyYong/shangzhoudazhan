@@ -490,7 +490,8 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
         <div class="setup-actions">
           <button id="btn-setup-clear">清空</button>
           <button id="btn-setup-import">导入</button>
-          <button id="btn-setup-start" class="btn-primary">导出</button>
+          <button id="btn-setup-export">导出</button>
+          <button id="btn-setup-save" class="btn-primary">保存</button>
           <button id="btn-setup-exit">退出</button>
         </div>
         <input type="file" id="file-import-layout" accept=".json,application/json" style="display:none">
@@ -937,9 +938,11 @@ function makeId() { return nextId++; }
 let loadedLayouts = {};   // {small, battle, final, custom} → layout 数组 或 null（回退）
 let layoutsReady = false; // false 时 initPieces 用 PRESETS 兜底
 function loadPresetLayouts() {
+  // 优先级 0：localStorage 中保存的自定义布局（用户在摆子界面"保存"）
   // 优先级 1：HTML 源码中的硬编码默认布局（codes/商周大战.html 通过 update-layouts.cjs 注入）
   // 优先级 2：fetch codes/layouts/*.json（HTTP 服务器模式下仍可用，每次带 ?v= 防缓存）
   // 优先级 3：该档回退 null，由 initPieces 走 PRESETS 兜底
+  const fromLS = (key) => { try { return JSON.parse(localStorage.getItem("szdz_layout_" + key)); } catch (e) { return null; } };
   const fromSource = window.__DEFAULT_LAYOUTS__;
   const tryApply = (key, raw) => {
     if (!raw) return;
@@ -949,11 +952,13 @@ function loadPresetLayouts() {
   };
   if (fromSource) {
     for (const key of ["small", "battle", "final", "custom"]) tryApply(key, fromSource[key]);
+    for (const key of ["small", "battle", "final"]) { const ls = fromLS(key); if (ls) tryApply(key, ls); }
     layoutsReady = true;
     return Promise.resolve();
   }
   const tryOne = (key, url) => fetch(url + "?v=" + Date.now()).then(r => r.json()).then(j => {
     tryApply(key, j.layout);
+    const ls = fromLS(key); if (ls) tryApply(key, ls);
   }).catch(e => { loadedLayouts[key] = null; console.warn("[layouts] " + key + " 加载失败", e); });
   return Promise.all([
     tryOne("small",  "codes/layouts/small.json"),
@@ -3123,7 +3128,8 @@ document.getElementById("btn-setup-clear").addEventListener("click", clearSetup)
 document.getElementById("btn-setup-import").addEventListener("click", () => document.getElementById("file-import-layout").click());
 document.getElementById("file-import-layout").addEventListener("change", importLayout);
 document.getElementById("btn-setup-exit").addEventListener("click", () => exitSetup(false));
-document.getElementById("btn-setup-start").addEventListener("click", startFromSetup);
+document.getElementById("btn-setup-export").addEventListener("click", exportSetup);
+document.getElementById("btn-setup-save").addEventListener("click", saveSetup);
 document.getElementById("btn-rules").addEventListener("click", () => {
   document.getElementById("rules").classList.toggle("open");
 });
@@ -3407,6 +3413,30 @@ function downloadLayoutAsJson(presetKey) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// 导出按钮：校验后下载 JSON 文件
+function exportSetup() {
+  const err = validateSetup();
+  if (err) { document.getElementById("hint").textContent = "校验未通过：" + err; return; }
+  const layout = pieces.map(p => [p.side, p.type, p.col, p.row]);
+  downloadLayoutFile(layout, currentPreset);
+  document.getElementById("hint").textContent = "已下载 " + currentPreset + ".json，请覆盖到 codes/layouts/" + currentPreset + ".json 后刷新页面。";
+}
+
+// 保存按钮：校验后写入 localStorage 替换当前档开局，并直接开始对局
+function saveSetup() {
+  const err = validateSetup();
+  if (err) { document.getElementById("hint").textContent = "校验未通过：" + err; return; }
+  const layout = pieces.map(p => [p.side, p.type, p.col, p.row]);
+  try {
+    localStorage.setItem("szdz_layout_" + currentPreset, JSON.stringify(layout));
+  } catch (e) {
+    document.getElementById("hint").textContent = "保存失败：" + (e.message || e);
+    return;
+  }
+  loadedLayouts[currentPreset] = layout;
+  exitSetup(true);
 }
 function startFromSetup() {
   const err = validateSetup();
