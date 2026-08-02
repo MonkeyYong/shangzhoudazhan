@@ -1077,7 +1077,7 @@ function legalMoves(piece) {
 // 武王理论行动范围（2格几何 / 暴走无限射线），忽略阻挡。用于主动解锁与分身触发。
 function theoreticalRange(king) {
   const set = new Set();
-  const maxStep = king.state === "berserk" ? 18 : 2;
+  const maxStep = king.state === "berserk" ? 18 : 1; // 非暴走王每回合仅走1格
   for (const [dc, dr] of DIRS) {
     for (let s = 1; s <= maxStep; s++) {
       const nc = king.col + dc * s, nr = king.row + dr * s;
@@ -1623,11 +1623,11 @@ function simHasReach(sim, piece) {
   return false;
 }
 // 武王理论范围几何判定（等价 theoreticalRange L773，忽略阻挡；零分配）：
-// 非暴走=切比雪夫距离≤2；暴走=8 方向射线（同行/同列/同对角线）
+// 非暴走=切比雪夫距离≤1（王每回合仅走1格）；暴走=8 方向射线
 function simInTheoryRange(king, c, r) {
   const dc = Math.abs(king.col - c), dr = Math.abs(king.row - r);
   if (dc + dr === 0) return false;
-  if (king.state !== "berserk") return Math.max(dc, dr) <= 2;
+  if (king.state !== "berserk") return Math.max(dc, dr) <= 1;
   return dc === 0 || dr === 0 || dc === dr;
 }
 // 是否覆盖指定格（零分配、命中即停；用于禁锢统计与评估）
@@ -1987,7 +1987,10 @@ function simSortMoves(sim, moves, ply) {
     mv.enc = enc;
     if (mv.capture) {
       const t = simAt(sim, mv.toCol, mv.toRow);
-      mv.ord = 200000 + (t ? (AI_VAL[t.type] || 100) : 100);
+      const base = t ? (AI_VAL[t.type] || 100) : 100;
+      // 王/分身捕获额外加权：作为最高优先级
+      const bonus = (t && (t.type === "king" || t.type === "clone")) ? 100000 : 0;
+      mv.ord = 200000 + base + bonus;
     } else if (enc === k1) mv.ord = 150000;
     else if (enc === k2) mv.ord = 140000;
     else mv.ord = aiHistory ? aiHistory[mv.fromIdx * 361 + mv.toIdx] : 0;
@@ -2090,7 +2093,7 @@ function simEval(sim, side) {
     }
     // 攻击端：能威胁到敌方子 → 奖励（鼓励进攻姿态）
     if (threatening) {
-      score += (p.side === side) ? 15 : -15;
+      score += (p.side === side) ? 30 : -30;
     }
   }
   return score;
