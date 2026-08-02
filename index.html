@@ -1160,6 +1160,22 @@ function inAnyFriendlyBigRange(soldier) {
   return false;
 }
 
+// 小棋子（兵/马）的理论移动范围（无视阻挡）：马日字步，兵滑行1-2格
+function smallPieceReaches(piece, tc, tr) {
+  if (piece.type === "horse") {
+    for (const [dc, dr] of KNIGHT_OFFSETS) {
+      if (piece.col + dc === tc && piece.row + dr === tr) return true;
+    }
+    return false;
+  }
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= 2; s++) {
+      if (piece.col + dc * s === tc && piece.row + dr * s === tr) return true;
+    }
+  }
+  return false;
+}
+
 // 分身触发（双向）：士兵或马进入武王范围，或武王进入士兵或马的范围。
 // moved 为本次移动的棋子；返回 true 表示存在可变身的小棋子（兵/卒或马）。
 function cloneOfferCheck(moved) {
@@ -1172,11 +1188,15 @@ function cloneOfferCheck(moved) {
     // 情形一：士兵/马进入武王移动范围
     if (inAnyFriendlyBigRange(moved)) cloneCandidates.push(moved);
   } else if (moved.type === "king" || moved.type === "clone") {
-    // 情形二：武王进入小棋子移动范围（等价于：小棋子落在武王2格范围内）
+    // 情形二：武王进入小棋子移动范围（双向检查：马日字步/兵滑行）
     const range = theoreticalRange(moved);
     for (const s of pieces) {
-      if (s.side !== moved.side || (s.type !== "soldier" && s.type !== "horse")) continue;
-      if (range.has(s.col + "," + s.row)) cloneCandidates.push(s);
+      if (s.dead || s.side !== moved.side) continue;
+      if (s.type !== "soldier" && s.type !== "horse") continue;
+      // 小棋子在武王范围内 OR 武王在小棋子移动范围内
+      if (range.has(s.col + "," + s.row) || smallPieceReaches(s, moved.col, moved.row)) {
+        cloneCandidates.push(s);
+      }
     }
   }
   if (cloneCandidates.length === 0) return false;
@@ -1713,6 +1733,22 @@ function simBerserkCheck(sim, moved) {
     k.activelyUnlocked = true;
   }
 }
+// 小棋子（兵/马）能否到达指定格（无视阻挡）：马日字步，兵滑行1-2格
+function simSmallPieceReaches(sim, piece, tc, tr) {
+  if (piece.type === "horse") {
+    for (const [dc, dr] of KNIGHT_OFFSETS) {
+      if (piece.col + dc === tc && piece.row + dr === tr) return true;
+    }
+    return false;
+  }
+  for (const [dc, dr] of DIRS) {
+    for (let s = 1; s <= 2; s++) {
+      if (piece.col + dc * s === tc && piece.row + dr * s === tr) return true;
+    }
+  }
+  return false;
+}
+
 // 首个可转化小棋子（士兵或马；对应全局 settleMove「取 cloneCandidates[0]」的顺序）
 function simFirstCloneCand(sim, moved) {
   if (moved.type === "soldier" || moved.type === "horse") {
@@ -1724,10 +1760,11 @@ function simFirstCloneCand(sim, moved) {
     }
     return null;
   }
-  // 情形二：武王/分身进入小棋子范围 → 转化范围内首个士兵/马
+  // 情形二：武王/分身进入小棋子范围（双向：马日字步 / 兵滑行）
   for (const s of sim.pieces) {
     if (s.dead || s.side !== moved.side || (s.type !== "soldier" && s.type !== "horse")) continue;
-    if (simInTheoryRange(moved, s.col, s.row)) return s;
+    // 小棋子在武王范围内 OR 武王在小棋子移动范围内
+    if (simInTheoryRange(moved, s.col, s.row) || simSmallPieceReaches(sim, s, moved.col, moved.row)) return s;
   }
   return null;
 }
