@@ -2069,31 +2069,12 @@ function simEval(sim, side) {
     }
     if (best < 99) score += Math.max(0, 12 - best) * 6 + (best <= 2 ? 100 : 0);
   }
-  // 棋子安全 + 攻击机会（合并遍历减少开销）
-  // attacked: 被敌方瞄准；defended: 有己方保护；threatening: 能攻击到敌方子
-  for (const p of sim.pieces) {
-    if (p.dead || p.type === "king") continue;
-    const val = AI_VAL[p.type] || 100;
-    let attacked = false, defended = false, threatening = false;
-    for (const e of sim.pieces) {
-      if (e.dead || e.state === "imprisoned_invincible") continue;
-      const d = Math.max(Math.abs(e.col - p.col), Math.abs(e.row - p.row));
-      if (e.type === "horse" ? d > 3 : d > 2) continue;
-      if (e.side !== p.side) {
-        if (simCanAttack(sim, e, p.col, p.row)) attacked = true;
-        if (!threatening && simCanAttack(sim, p, e.col, e.row)) threatening = true;
-      } else if (e !== p && simCanAttack(sim, e, p.col, p.row)) {
-        defended = true;
-      }
-    }
-    // 防御端：悬子轻罚（让 AI 敢于交换），受攻子微罚
-    if (attacked) {
-      const penalty = defended ? val * 0.05 : val * 0.3;
-      if (p.side === side) score -= penalty; else score += penalty;
-    }
-    // 攻击端：能威胁到敌方子 → 奖励（鼓励进攻姿态）
-    if (threatening) {
-      score += (p.side === side) ? 300 : -300;
+  // 进攻态势：己方非王子靠近敌方王 → 简单距离奖励（O(n)，无 O(n²) 开销）
+  if (opKing && opKing.hasMoved) {
+    for (const p of sim.pieces) {
+      if (p.dead || p.side !== side || p.type === "king") continue;
+      const d = Math.max(Math.abs(p.col - opKing.col), Math.abs(p.row - opKing.row));
+      if (d <= 4) score += (5 - d) * 80; // d=1:+320, d=2:+240, d=3:+160, d=4:+80
     }
   }
   return score;
