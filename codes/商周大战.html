@@ -3172,14 +3172,15 @@ function handleTimerStart(activeSide) {
   timerRemaining = TIMER_DEFAULT;
   timerActiveSide = activeSide;
   renderTimerDisplay();
-  // 只有行棋方才运行倒计时（超时时由行棋方AI代走）
-  if (activeSide === mySide) {
-    timerInterval = setInterval(() => {
-      timerRemaining--;
-      renderTimerDisplay();
-      if (timerRemaining <= 0) { stopTimer(); aiTimeoutMove(); }
-    }, 1000);
-  }
+  // 双方都运行倒计时，超时时仅行棋方触发AI代走
+  timerInterval = setInterval(() => {
+    timerRemaining--;
+    renderTimerDisplay();
+    if (timerRemaining <= 0) {
+      stopTimer();
+      if (activeSide === mySide) aiTimeoutMove();
+    }
+  }, 1000);
 }
 
 function stopTimer() {
@@ -3193,9 +3194,8 @@ function renderTimerDisplay() {
   const el = document.getElementById("timer-display");
   if (!el || !timerActiveSide) return;
   const isMe = timerActiveSide === mySide;
-  const label = timerActiveSide === "white" ? "白方" : "黑方";
-  const prefix = isMe ? "我方" : "敌方";
-  el.textContent = prefix + label + "行棋倒计时：" + timerRemaining;
+  const prefix = isMe ? "我" : "敌";
+  el.textContent = prefix + "方AI小菜鸡请求出战：" + timerRemaining;
   el.classList.toggle("urgent", timerRemaining <= 5);
   el.style.display = "";
 }
