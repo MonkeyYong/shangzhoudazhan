@@ -66,12 +66,6 @@
     [
       "white",
       "horse",
-      9,
-      4
-    ],
-    [
-      "white",
-      "horse",
       8,
       2
     ],
@@ -94,34 +88,16 @@
       16
     ],
     [
-      "black",
-      "horse",
+      "white",
+      "soldier",
       9,
-      14
+      5
     ],
     [
       "black",
       "soldier",
-      8,
-      12
-    ],
-    [
-      "black",
-      "soldier",
-      10,
-      12
-    ],
-    [
-      "white",
-      "soldier",
-      8,
-      6
-    ],
-    [
-      "white",
-      "soldier",
-      10,
-      6
+      9,
+      13
     ]
   ]
 }
