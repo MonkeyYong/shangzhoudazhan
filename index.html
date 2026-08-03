@@ -3376,13 +3376,15 @@ function clearSetup() {
 }
 function clearCacheSetup() {
   const key = "szdz_layout_" + currentPreset;
+  const presetName = PRESETS[currentPreset]?.name || currentPreset;
   if (!localStorage.getItem(key)) {
-    document.getElementById("hint").textContent = "当前档位「" + (PRESETS[currentPreset]?.name || currentPreset) + "」无缓存。";
+    document.getElementById("hint").textContent = "当前档位「" + presetName + "」无缓存，已是默认布局。";
     return;
   }
   localStorage.removeItem(key);
   delete loadedLayouts[currentPreset];
-  document.getElementById("hint").textContent = "已清除「" + (PRESETS[currentPreset]?.name || currentPreset) + "」的缓存布局，下次开局将使用默认布局。";
+  newGame();
+  document.getElementById("hint").textContent = "已清除「" + presetName + "」的缓存，已恢复默认布局。";
 }
 function validateLoadedLayout(layout, key) {
   if (!Array.isArray(layout)) return null;
