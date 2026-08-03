@@ -3172,8 +3172,12 @@ function renderTimerDisplay() {
   const el = document.getElementById("timer-display");
   if (!el || !timerActiveSide) return;
   const isMe = timerActiveSide === mySide;
-  const prefix = isMe ? "我" : "敌";
-  el.textContent = prefix + "方AI小菜鸡请求出战：" + timerRemaining;
+  if (isMe) {
+    el.textContent = "我方AI小菜鸡请求出战：" + timerRemaining;
+  } else {
+    const label = timerActiveSide === "white" ? "白" : "黑";
+    el.textContent = "敌方" + label + "棋行棋倒计时：" + timerRemaining;
+  }
   el.classList.toggle("urgent", timerRemaining <= 5);
   el.style.display = "";
 }
