@@ -1531,19 +1531,25 @@ function finishTurn(piece, res, ctx) {
 
 function announce(term) {
   const hint = document.getElementById("hint");
-  const isOnline = onlineMode && mySide;
   let result;
   if (term.winner === "draw") {
     hint.textContent = "平局！局面重复 3 次。";
     result = "draw";
   } else if (term.stalemate) {
     hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜（对方无棋可走）！";
-    result = isOnline ? (term.winner === mySide ? "victory" : "defeat") : "victory";
+    result = judgeResult(term.winner);
   } else {
     hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
-    result = isOnline ? (term.winner === mySide ? "victory" : "defeat") : "victory";
+    result = judgeResult(term.winner);
   }
   showGameEndAnimation(result);
+}
+
+// 判断是胜利还是失败：联机看 mySide，人机看 aiSide，双人对弈默认胜利
+function judgeResult(winner) {
+  if (onlineMode && mySide) return winner === mySide ? "victory" : "defeat";
+  if (aiSide) return winner === aiSide ? "defeat" : "victory";
+  return "victory";
 }
 
 function showGameEndAnimation(result) {
