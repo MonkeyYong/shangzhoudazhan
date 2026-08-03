@@ -2864,7 +2864,7 @@ function updatePanel() {
   document.getElementById("w-clone").textContent = cloneCount("white");
   document.getElementById("b-clone").textContent = cloneCount("black");
   document.getElementById("steps").textContent = stepCount;
-  document.getElementById("btn-undo").disabled = undoStack.length === 0;
+  document.getElementById("btn-undo").disabled = undoStack.length === 0 || (onlineMode && (turn !== mySide || stepCount < 2));
   document.getElementById("btn-redo").disabled = redoStack.length === 0;
 
   // 行棋 / 复盘 / 研究 三态切换
@@ -3222,11 +3222,7 @@ function handleServerMessage(msg) {
       receiveOpponentMove(msg.data);
       break;
     case "undo-request":
-      if (confirm("对方请求悔棋，是否同意？")) {
-        wsSend({ type: "undo-approve", roomId });
-      } else {
-        wsSend({ type: "undo-reject", roomId });
-      }
+      showUndoPrompt();
       break;
     case "undo-approve":
       document.getElementById("hint").textContent = "对方同意悔棋。";
@@ -3235,7 +3231,7 @@ function handleServerMessage(msg) {
       document.getElementById("hint").textContent = "对方拒绝了悔棋请求。";
       break;
     case "do-undo":
-      undo();
+      for (let i = 0; i < (msg.count || 1); i++) undo();
       render(); renderScoresheet();
       document.getElementById("hint").textContent = "已悔棋。" + (turn === mySide ? "轮到你行棋。" : "等待对手行棋...");
       break;
@@ -3311,8 +3307,23 @@ function receiveOpponentMove(data) {
 
 function sendUndoRequest() {
   if (!onlineMode || !opponentConnected) return;
+  if (turn !== mySide) return;
   wsSend({ type: "undo-request", roomId });
   document.getElementById("hint").textContent = "已发送悔棋请求，等待对方同意...";
+}
+
+// 非阻塞的悔棋请求提示（替代 confirm）
+function showUndoPrompt() {
+  const hint = document.getElementById("hint");
+  hint.innerHTML = '对方请求悔棋 <button id="undo-yes" style="margin-left:8px;padding:2px 10px;cursor:pointer">同意</button> <button id="undo-no" style="margin-left:4px;padding:2px 10px;cursor:pointer">拒绝</button>';
+  document.getElementById("undo-yes").addEventListener("click", () => {
+    wsSend({ type: "undo-approve", roomId });
+    hint.textContent = "已同意悔棋。";
+  });
+  document.getElementById("undo-no").addEventListener("click", () => {
+    wsSend({ type: "undo-reject", roomId });
+    hint.textContent = "已拒绝悔棋。";
+  });
 }
 
 function sendSync() {

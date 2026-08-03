@@ -155,28 +155,45 @@ function handleMove(ws, data) {
 }
 
 function handleUndoRequest(ws, data) {
-  const { roomId } = ws;
+  const { roomId, side } = ws;
   if (!roomId) return;
-  broadcast(roomId, ws, { type: 'undo-request' });
-}
-
-function handleUndoApprove(ws, data) {
-  const { roomId } = ws;
-  if (!roomId) return;
-  broadcast(roomId, ws, { type: 'undo-approve' });
-  // 双方都执行悔棋
   const room = rooms.get(roomId);
-  if (room) {
-    room.players.forEach(player => {
-      send(player, { type: 'do-undo' });
-    });
+  if (!room) return;
+  // 只发给对手，不广播给所有人
+  const opponent = room.playerSlots[side === 'white' ? 'black' : 'white'];
+  if (opponent) {
+    console.log(`[悔棋] ${side} 请求悔棋 → 转发给对手`);
+    send(opponent, { type: 'undo-request' });
   }
 }
 
-function handleUndoReject(ws, data) {
-  const { roomId } = ws;
+function handleUndoApprove(ws, data) {
+  const { roomId, side } = ws;
   if (!roomId) return;
-  broadcast(roomId, ws, { type: 'undo-reject' });
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const opponent = room.playerSlots[side === 'white' ? 'black' : 'white'];
+  if (opponent) {
+    console.log(`[悔棋] ${side} 同意悔棋 → 通知对手`);
+    send(opponent, { type: 'undo-approve' });
+  }
+  // 双方都执行悔棋（退两步：对手的+自己的）
+  room.players.forEach(player => {
+    send(player, { type: 'do-undo', count: 2 });
+  });
+  console.log(`[悔棋] 双方执行悔棋（两步）`);
+}
+
+function handleUndoReject(ws, data) {
+  const { roomId, side } = ws;
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const opponent = room.playerSlots[side === 'white' ? 'black' : 'white'];
+  if (opponent) {
+    console.log(`[悔棋] ${side} 拒绝悔棋 → 通知对手`);
+    send(opponent, { type: 'undo-reject' });
+  }
 }
 
 function handleSync(ws, data) {
