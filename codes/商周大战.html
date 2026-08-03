@@ -1563,7 +1563,7 @@ function showGameEndAnimation(result) {
     const board = document.getElementById("board-wrap");
     if (board) { board.classList.add("board-shake"); setTimeout(() => board.classList.remove("board-shake"), 600); }
   }
-  const emoji = result === "defeat" ? "💀 败 北 💀" : result === "draw" ? "🤝 平 局 🤝" : "🏆 胜 利 🏆";
+  const emoji = result === "defeat" ? "😿 下次一定… 😿" : result === "draw" ? "🤝 平 局 🤝" : "🏆 胜 利 🏆";
   const txt = document.createElement("div");
   txt.className = "game-end-text " + flashClass;
   txt.textContent = emoji;
