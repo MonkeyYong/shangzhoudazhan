@@ -383,6 +383,7 @@
   @keyframes confettiFall { 0% { opacity: 1; transform: translateY(-20px) rotate(0deg) scale(1); } 100% { opacity: 0; transform: translateY(100vh) rotate(720deg) scale(0.3); } }
   .game-end-flash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9998; animation: flashFade 1.2s ease-out forwards; }
   .game-end-flash.victory { background: radial-gradient(circle, rgba(255,215,0,0.4), rgba(255,215,0,0) 70%); }
+  .game-end-flash.victory-black { background: radial-gradient(circle, rgba(155,89,182,0.5), rgba(155,89,182,0) 70%); }
   .game-end-flash.defeat { background: radial-gradient(circle, rgba(255,0,0,0.5), rgba(255,0,0,0) 70%); }
   .game-end-flash.draw { background: radial-gradient(circle, rgba(100,149,237,0.4), rgba(100,149,237,0) 70%); }
   @keyframes flashFade { 0% { opacity: 1; } 100% { opacity: 0; } }
@@ -390,6 +391,7 @@
   @keyframes boardShake { 0%, 100% { transform: translateX(0); } 10%, 50%, 90% { transform: translateX(-4px); } 30%, 70% { transform: translateX(4px); } }
   .game-end-text { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 36px; font-weight: 900; text-shadow: 0 4px 20px rgba(0,0,0,0.8); pointer-events: none; z-index: 10000; animation: textPop 2s ease-out forwards; }
   .game-end-text.victory { color: #ffd700; }
+  .game-end-text.victory-black { color: #c39bd3; }
   .game-end-text.defeat { color: #ff4444; }
   .game-end-text.draw { color: #6495ed; }
   @keyframes textPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); } 40% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60%) scale(1); } }
@@ -1494,33 +1496,43 @@ function announce(term) {
 function judgeResult(winner) {
   if (onlineMode && mySide) return winner === mySide ? "victory" : "defeat";
   if (aiSide) return winner === aiSide ? "defeat" : "victory";
-  return "victory";
+  return "victory-" + winner;
 }
 
 function showGameEndAnimation(result) {
+  const isBlackVictory = result === "victory-black";
+  const flashType = result.startsWith("victory") ? (isBlackVictory ? "victory-black" : "victory") : result;
   const flash = document.createElement("div");
-  flash.className = "game-end-flash " + result;
+  flash.className = "game-end-flash " + flashType;
   document.body.appendChild(flash);
   if (result === "defeat") {
     const board = document.getElementById("board-wrap");
     if (board) { board.classList.add("board-shake"); setTimeout(() => board.classList.remove("board-shake"), 600); }
   }
-  const textMap = { victory: "🏆 胜 利 🏆", defeat: "💀 败 北 💀", draw: "🤝 平 局 🤝" };
+  const textMap = {
+    "victory": "🏆 胜 利 🏆", "victory-white": "🏆 胜 利 🏆", "victory-black": "🏆 胜 利 🏆",
+    defeat: "💀 败 北 💀", draw: "🤝 平 局 🤝"
+  };
+  const textType = result.startsWith("victory") ? (isBlackVictory ? "victory-black" : "victory") : result;
   const txt = document.createElement("div");
-  txt.className = "game-end-text " + result;
+  txt.className = "game-end-text " + textType;
   txt.textContent = textMap[result];
   document.body.appendChild(txt);
-  if (result !== "defeat") spawnConfetti(result === "victory" ? 60 : 25);
+  if (result !== "defeat") spawnConfetti(isBlackVictory ? "black" : (result === "draw" ? "draw" : "gold"));
   setTimeout(() => { flash.remove(); txt.remove(); }, 2500);
 }
 
-function spawnConfetti(count) {
+function spawnConfetti(style) {
   const overlay = document.createElement("div");
   overlay.id = "game-end-overlay";
   document.body.appendChild(overlay);
-  const palette = count > 30
-    ? ["#ffd700", "#ffec80", "#ffb347", "#ff6b6b", "#4ecdc4", "#45b7d1"]
-    : ["#6495ed", "#87ceeb", "#b0c4de", "#add8e6"];
+  const palettes = {
+    gold: ["#ffd700", "#ffec80", "#ffb347", "#ff6b6b", "#4ecdc4", "#45b7d1"],
+    black: ["#9b59b6", "#8e44ad", "#c39bd3", "#d2b4de", "#1a1a2e", "#16213e", "#e8daef", "#6c3483"],
+    draw: ["#6495ed", "#87ceeb", "#b0c4de", "#add8e6"]
+  };
+  const palette = palettes[style] || palettes.gold;
+  const count = style === "gold" ? 60 : style === "black" ? 50 : 25;
   for (let i = 0; i < count; i++) {
     const c = document.createElement("div");
     c.className = "confetti";
@@ -1529,7 +1541,7 @@ function spawnConfetti(count) {
     c.style.background = palette[Math.floor(Math.random() * palette.length)];
     c.style.width = 6 + Math.random() * 8 + "px";
     c.style.height = 6 + Math.random() * 8 + "px";
-    c.style.borderRadius = Math.random() > 0.5 ? "50%" : "2px";
+    c.style.borderRadius = style === "black" ? "50% 50% 50% 0" : (Math.random() > 0.5 ? "50%" : "2px");
     c.style.animationDelay = Math.random() * 1.5 + "s";
     c.style.animationDuration = 2 + Math.random() * 1.5 + "s";
     overlay.appendChild(c);
