@@ -3427,8 +3427,7 @@ function downloadLayoutAsJson(presetKey) {
 function exportSetup() {
   const err = validateSetup();
   if (err) { document.getElementById("hint").textContent = "校验未通过：" + err; return; }
-  const layout = pieces.map(p => [p.side, p.type, p.col, p.row]);
-  downloadLayoutFile(layout, currentPreset);
+  downloadLayoutAsJson(currentPreset);
   document.getElementById("hint").textContent = "已下载 " + currentPreset + ".json，请覆盖到 codes/layouts/" + currentPreset + ".json 后刷新页面。";
 }
 
