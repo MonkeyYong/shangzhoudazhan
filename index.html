@@ -302,6 +302,23 @@
   .btn-grid-2 { grid-template-columns: 1fr 1fr; margin-bottom: 6px; }
   .btn-grid-3 { grid-template-columns: 1fr 1fr 1fr; margin-bottom: 6px; }
 
+  /* 联机对战面板 */
+  #remote-controls { display: none; }
+  #remote-controls.active { display: block; }
+  .remote-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+  .remote-row input {
+    flex: 1; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface-1); color: var(--ink); font-size: 12px;
+  }
+  .remote-row input::placeholder { color: var(--ink-dim); }
+  #remote-status {
+    padding: 8px; border-radius: 6px; font-size: 12px; text-align: center;
+    background: var(--surface-2); color: var(--ink-dim); margin-top: 8px;
+  }
+  #remote-status.connected { background: rgba(76, 175, 80, 0.2); color: #81c784; }
+  #remote-status.waiting { background: rgba(255, 193, 7, 0.2); color: #ffd54f; }
+  #remote-status.error { background: rgba(244, 67, 54, 0.2); color: #ef9a9a; }
+
   #btn-rules .caret {
     display: inline-block; margin-left: 5px; font-size: 9px; line-height: 1;
     color: var(--gold); transform: rotate(90deg); transition: transform .25s ease;
@@ -434,6 +451,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-08-03T00:56:46.307Z";
               <option value="human">双人对弈</option>
               <option value="ai-black" selected>AI 执黑</option>
               <option value="ai-white">AI 执白</option>
+              <option value="remote">联机对战</option>
             </select>
             <button type="button" class="cdd-trigger" aria-haspopup="listbox" aria-expanded="false">
               <span class="cdd-val"></span><span class="cdd-arrow"></span>
@@ -442,6 +460,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-08-03T00:56:46.307Z";
               <div class="cd-opt" data-val="human" role="option"><span class="cd-name">双人</span><span class="cd-sub">热座</span></div>
               <div class="cd-opt" data-val="ai-black" role="option"><span class="cd-name">AI 黑</span><span class="cd-sub">人先手</span></div>
               <div class="cd-opt" data-val="ai-white" role="option"><span class="cd-name">AI 白</span><span class="cd-sub">AI 先手</span></div>
+              <div class="cd-opt" data-val="remote" role="option"><span class="cd-name">联机</span><span class="cd-sub">局域网</span></div>
             </div>
           </div>
         </div>
@@ -453,6 +472,19 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-08-03T00:56:46.307Z";
             <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
           </div>
         </div>
+      </div>
+      <!-- 联机对战面板 -->
+      <div id="remote-controls">
+        <div class="remote-row">
+          <input type="text" id="server-ip" placeholder="服务器地址（如 192.168.1.5:8080）">
+          <button id="btn-connect" class="btn-primary">连接</button>
+        </div>
+        <div class="remote-row">
+          <input type="text" id="room-id" placeholder="房间号（6 位数字）" maxlength="6">
+          <button id="btn-create-room">创建房间</button>
+          <button id="btn-join-room">加入房间</button>
+        </div>
+        <div id="remote-status">未连接</div>
       </div>
     </section>
 
@@ -927,6 +959,14 @@ let hurryRequested = false; // 「催一催」点击后置位；aiChooseMove 在
 // AI 参数：depth 最大搜索层数；timeLimitMs 迭代加深软限（超时回退至最近完整层）。
 // depth 由 #ai-depth 输入框提供；timeLimitMs 固定 1 分钟上限；叶节点均接静态搜索（吃子链精算）。
 
+/* ----- 联机对战状态 ----- */
+let ws = null;              // WebSocket 连接
+let onlineMode = false;     // 是否联机模式
+let roomId = null;          // 当前房间号
+let mySide = null;          // 我执的颜色 "white"/"black"
+let isHost = false;         // 是否房主
+let opponentConnected = false; // 对手是否已连接
+
 let nextId = 1;
 function makeId() { return nextId++; }
 
@@ -1389,10 +1429,17 @@ function finishTurn(piece, res, ctx) {
     selected = null; legalMap.clear();
     render(); renderScoresheet();
     announce(r.terminal);
+    if (onlineMode) sendMoveToServer(piece, piece.col, piece.row, res.capture);
     return;
   }
   render(); renderScoresheet();
-  aiMaybeSchedule(); // 人类落子结算完 → 轮到 AI 则调度 AI 回合
+  if (onlineMode) {
+    // 联机模式：发送落子给对手
+    sendMoveToServer(piece, piece.col, piece.row, res.capture);
+    document.getElementById("hint").textContent = "等待对手行棋...";
+  } else {
+    aiMaybeSchedule(); // 人类落子结算完 → 轮到 AI 则调度 AI 回合
+  }
 }
 
 function announce(term) {
@@ -2847,6 +2894,7 @@ canvas.addEventListener("click", (e) => {
   if (replayMode && !studyMode) return;
   if (gameOver) return;
   if (aiBusy || (aiSide && turn === aiSide)) return; // AI 回合 / AI 思考中：禁止人类操作棋盘
+  if (onlineMode && turn !== mySide) return; // 联机模式：不是自己的回合禁止操作
   const rect = canvas.getBoundingClientRect();
   const x0 = (e.clientX - rect.left) * (BOARD_PX / rect.width);
   const y0 = (e.clientY - rect.top) * (BOARD_PX / rect.height);
@@ -3026,6 +3074,10 @@ document.getElementById("btn-clear-cache").addEventListener("click", clearCacheS
 // 终局是特例：终局时 turn 指向收束方而非轮走方，AI 获胜后也连撤两手，让人类重新行棋。
 function humanUndo() {
   if (undoStack.length === 0) return;
+  if (onlineMode) {
+    sendUndoRequest();
+    return;
+  }
   const twice = aiSide && undoStack.length >= 2 && (turn !== aiSide || gameOver);
   undo();
   if (twice) undo();
@@ -3043,6 +3095,194 @@ document.getElementById("preset").addEventListener("change", (e) => {
   currentPreset = e.target.value;
   newGame(); // 自定义同内置档位：已存阵容直接开局；尚未创建时 newGame 检测空局自动进摆子
 });
+
+/* =========================================================
+ * 联机对战模块
+ * ========================================================= */
+const remoteStatus = document.getElementById("remote-status");
+
+function updateRemoteStatus(text, type) {
+  remoteStatus.textContent = text;
+  remoteStatus.className = type ? type : "";
+}
+
+function connectToServer(addr) {
+  if (ws) { ws.close(); ws = null; }
+  if (!addr.includes(":")) addr += ":8080";
+  const url = "ws://" + addr;
+  updateRemoteStatus("连接中...", "waiting");
+  try {
+    ws = new WebSocket(url);
+  } catch (e) {
+    updateRemoteStatus("连接失败：" + e.message, "error");
+    return;
+  }
+  ws.onopen = () => {
+    updateRemoteStatus("已连接服务器", "connected");
+    document.getElementById("btn-create-room").disabled = false;
+    document.getElementById("btn-join-room").disabled = false;
+  };
+  ws.onmessage = (e) => {
+    try { handleServerMessage(JSON.parse(e.data)); } catch (err) { console.error("消息解析错误:", err); }
+  };
+  ws.onclose = () => {
+    if (onlineMode && opponentConnected) {
+      updateRemoteStatus("连接断开", "error");
+      opponentConnected = false;
+      document.getElementById("hint").textContent = "与服务器断开连接。";
+    } else if (!onlineMode) {
+      updateRemoteStatus("未连接", "");
+    }
+    document.getElementById("btn-create-room").disabled = true;
+    document.getElementById("btn-join-room").disabled = true;
+  };
+  ws.onerror = () => {
+    updateRemoteStatus("连接失败，请检查地址", "error");
+  };
+}
+
+function handleServerMessage(msg) {
+  switch (msg.type) {
+    case "room-created":
+      roomId = msg.roomId;
+      isHost = true;
+      mySide = "white";
+      document.getElementById("room-id").value = roomId;
+      updateRemoteStatus("房间 " + roomId + "，等待对手加入...", "waiting");
+      break;
+    case "game-start":
+      mySide = msg.side;
+      isHost = (mySide === "white");
+      opponentConnected = true;
+      onlineMode = true;
+      aiSide = null;
+      document.getElementById("opponent").value = "remote";
+      newGame();
+      updateRemoteStatus("对手已加入！你执" + (mySide === "white" ? "白方（先手）" : "黑方（后手）"), "connected");
+      document.getElementById("hint").textContent = "游戏开始！" + (mySide === "white" ? "你执白方，请先行棋。" : "对手执白方，等待对手行棋...");
+      break;
+    case "move":
+      receiveOpponentMove(msg.data);
+      break;
+    case "undo-request":
+      if (confirm("对方请求悔棋，是否同意？")) {
+        wsSend({ type: "undo-approve", roomId });
+      } else {
+        wsSend({ type: "undo-reject", roomId });
+      }
+      break;
+    case "undo-approve":
+      document.getElementById("hint").textContent = "对方同意悔棋。";
+      break;
+    case "undo-reject":
+      document.getElementById("hint").textContent = "对方拒绝了悔棋请求。";
+      break;
+    case "do-undo":
+      undo();
+      render(); renderScoresheet();
+      document.getElementById("hint").textContent = "已悔棋。" + (turn === mySide ? "轮到你行棋。" : "等待对手行棋...");
+      break;
+    case "sync":
+      receiveSync(msg.data);
+      break;
+    case "opponent-left":
+      opponentConnected = false;
+      updateRemoteStatus("对手已离开", "error");
+      document.getElementById("hint").textContent = "对手已离开房间。";
+      break;
+    case "error":
+      updateRemoteStatus(msg.message, "error");
+      break;
+  }
+}
+
+function wsSend(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
+function createRoom() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    updateRemoteStatus("请先连接服务器", "error");
+    return;
+  }
+  wsSend({ type: "create-room" });
+}
+
+function joinRoom() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    updateRemoteStatus("请先连接服务器", "error");
+    return;
+  }
+  const id = document.getElementById("room-id").value.trim();
+  if (!id || id.length !== 6) {
+    updateRemoteStatus("请输入 6 位房间号", "error");
+    return;
+  }
+  wsSend({ type: "join-room", roomId: id });
+}
+
+function sendMoveToServer(piece, toCol, toRow, capture) {
+  wsSend({
+    type: "move",
+    roomId,
+    data: { pieceId: piece.id, fromCol: piece.col, fromRow: piece.row, toCol, toRow, capture }
+  });
+}
+
+function receiveOpponentMove(data) {
+  const { pieceId, toCol, toRow } = data;
+  const piece = pieces.find(p => p.id === pieceId && !p.dead);
+  if (!piece) { console.error("找不到对手棋子:", pieceId); return; }
+  undoStack.push(snapshot());
+  redoStack.length = 0;
+  const ctx = { fromCol: piece.col, fromRow: piece.row };
+  const res = doMove(piece, toCol, toRow);
+  const r = settleMove(piece, res, false);
+  const rec = buildRecord(piece, res, ctx, r);
+  moveLog.push(rec);
+  render(); renderScoresheet();
+  if (r.terminal) {
+    announce(r.terminal);
+  } else {
+    document.getElementById("hint").textContent = "轮到你行棋。";
+  }
+}
+
+function sendUndoRequest() {
+  if (!onlineMode || !opponentConnected) return;
+  wsSend({ type: "undo-request", roomId });
+  document.getElementById("hint").textContent = "已发送悔棋请求，等待对方同意...";
+}
+
+function sendSync() {
+  wsSend({
+    type: "sync", roomId,
+    data: { pieces: pieces.map(p => ({ id: p.id, side: p.side, type: p.type, col: p.col, row: p.row, state: p.state, isClone: p.isClone, hasMoved: p.hasMoved, dead: p.dead })), turn, stepCount, sideLostClone, sideCloneUnlocked, gameOver, moveLog }
+  });
+}
+
+function receiveSync(data) {
+  pieces = data.pieces.map(p => ({ ...p, hoverT: 0 }));
+  turn = data.turn; stepCount = data.stepCount;
+  sideLostClone = data.sideLostClone; sideCloneUnlocked = data.sideCloneUnlocked;
+  gameOver = data.gameOver; moveLog = data.moveLog;
+  selected = null; legalMap.clear();
+  render(); renderScoresheet();
+  document.getElementById("hint").textContent = "局面已同步。";
+}
+
+/* ----- 联机 UI 接线 ----- */
+document.getElementById("btn-connect").addEventListener("click", () => {
+  const addr = document.getElementById("server-ip").value.trim();
+  if (!addr) { updateRemoteStatus("请输入服务器地址", "error"); return; }
+  connectToServer(addr);
+});
+document.getElementById("btn-create-room").addEventListener("click", createRoom);
+document.getElementById("btn-join-room").addEventListener("click", joinRoom);
+document.getElementById("btn-create-room").disabled = true;
+document.getElementById("btn-join-room").disabled = true;
 
 /* ----- 通用主题化下拉：隐藏 select 持状态、主题化弹层；选项点击写回 select 并派发 change 复用其监听 ----- */
 const _DD = []; // 主题化下拉注册表：互斥（打开一个即收起其余）
@@ -3108,7 +3348,18 @@ document.getElementById("btn-hurry").addEventListener("click", (e) => {
 });
 // 对手切换：写入 aiSide 并以新设置开局；AI 参数仅 AI 模式下可调
 document.getElementById("opponent").addEventListener("change", (e) => {
-  aiSide = e.target.value === "ai-black" ? "black" : (e.target.value === "ai-white" ? "white" : null);
+  const val = e.target.value;
+  const remotePanel = document.getElementById("remote-controls");
+  if (val === "remote") {
+    onlineMode = false; aiSide = null;
+    aiParamsCell.classList.add("is-disabled");
+    remotePanel.classList.add("active");
+    return;
+  }
+  remotePanel.classList.remove("active");
+  if (ws) { ws.close(); ws = null; }
+  onlineMode = false; opponentConnected = false; mySide = null; roomId = null;
+  aiSide = val === "ai-black" ? "black" : (val === "ai-white" ? "white" : null);
   aiParamsCell.classList.toggle("is-disabled", !aiSide);
   newGame();
 });
@@ -3117,6 +3368,9 @@ document.getElementById("opponent").addEventListener("change", (e) => {
   const initOpp = document.getElementById("opponent").value;
   if (initOpp === "ai-black" || initOpp === "ai-white") {
     aiSide = initOpp === "ai-black" ? "black" : "white";
+  } else if (initOpp === "remote") {
+    document.getElementById("remote-controls").classList.add("active");
+    aiParamsCell.classList.add("is-disabled");
   } else {
     aiParamsCell.classList.add("is-disabled");
   }
