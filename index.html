@@ -448,7 +448,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
           <label class="cfg-cap" for="ai-depth">难度</label>
           <div class="num-step">
             <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="难度减 1">−</button>
-            <input type="number" id="ai-depth" value="6" min="1" max="10" class="num-inp">
+            <input type="number" id="ai-depth" value="5" min="1" max="10" class="num-inp">
             <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
           </div>
         </div>
@@ -3437,10 +3437,6 @@ function saveSetup() {
   }
   loadedLayouts[currentPreset] = layout;
   exitSetup(true);
-}
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function startFromSetup() {
   const err = validateSetup();

@@ -448,7 +448,7 @@ window.__DEFAULT_LAYOUTS_BUILD__ = "2026-07-31T06:10:43.237Z";
           <label class="cfg-cap" for="ai-depth">难度</label>
           <div class="num-step">
             <button type="button" class="num-btn" data-target="ai-depth" data-step="-1" aria-label="难度减 1">−</button>
-            <input type="number" id="ai-depth" value="6" min="1" max="10" class="num-inp">
+            <input type="number" id="ai-depth" value="5" min="1" max="10" class="num-inp">
             <button type="button" class="num-btn" data-target="ai-depth" data-step="1" aria-label="难度加 1">+</button>
           </div>
         </div>
@@ -1669,7 +1669,12 @@ function simCanAttack(sim, piece, tc, tr) {
   if (piece.state === "imprisoned_invincible") return false;
   if (piece.type === "horse") { // 马按日字步覆盖（与 reachableCells→knightReach 一致，不可当滑行棋子）
     for (const [dc, dr] of KNIGHT_OFFSETS) {
-      if (piece.col + dc === tc && piece.row + dr === tr) return true;
+      if (piece.col + dc !== tc || piece.row + dr !== tr) continue;
+      // 绊马腿：蹩脚方向有子则不能覆盖
+      const legC = piece.col + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+      const legR = piece.row + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+      if (legC >= 0 && legR >= 0 && legC <= 18 && legR <= 18 && sim.occ[legR * 19 + legC] >= 0) continue;
+      return true;
     }
     return false;
   }
@@ -1848,6 +1853,10 @@ function simHasAnyMove(sim, side) {
       for (const [dc, dr] of KNIGHT_OFFSETS) {
         const nc = p.col + dc, nr = p.row + dr;
         if (nc < 0 || nc > 18 || nr < 0 || nr > 18) continue;
+        // 绊马腿：蹩脚方向有子则不能走
+        const legC = p.col + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+        const legR = p.row + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+        if (legC >= 0 && legR >= 0 && legC <= 18 && legR <= 18 && sim.occ[legR * 19 + legC] >= 0) continue;
         const i = sim.occ[nr * 19 + nc];
         if (i < 0) return true;
         const t = sim.pieces[i];
