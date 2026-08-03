@@ -376,6 +376,56 @@
   #rules::-webkit-scrollbar-thumb { background: #4a3a24; border-radius: 4px; }
 
   #replay-controls { display: none; }
+
+  /* 对局结束动画 */
+  #game-end-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 9999;
+  }
+  .confetti {
+    position: absolute; width: 10px; height: 10px; opacity: 0;
+    animation: confettiFall 2.5s ease-out forwards;
+  }
+  @keyframes confettiFall {
+    0% { opacity: 1; transform: translateY(-20px) rotate(0deg) scale(1); }
+    100% { opacity: 0; transform: translateY(100vh) rotate(720deg) scale(0.3); }
+  }
+  .game-end-flash {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 9998;
+    animation: flashFade 1.2s ease-out forwards;
+  }
+  .game-end-flash.victory { background: radial-gradient(circle, rgba(255,215,0,0.4), rgba(255,215,0,0) 70%); }
+  .game-end-flash.defeat { background: radial-gradient(circle, rgba(255,0,0,0.5), rgba(255,0,0,0) 70%); }
+  .game-end-flash.draw { background: radial-gradient(circle, rgba(100,149,237,0.4), rgba(100,149,237,0) 70%); }
+  @keyframes flashFade {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .board-shake {
+    animation: boardShake 0.5s ease-in-out;
+  }
+  @keyframes boardShake {
+    0%, 100% { transform: translateX(0); }
+    10%, 50%, 90% { transform: translateX(-4px); }
+    30%, 70% { transform: translateX(4px); }
+  }
+  .game-end-text {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 36px; font-weight: 900; text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+    pointer-events: none; z-index: 10000;
+    animation: textPop 2s ease-out forwards;
+  }
+  .game-end-text.victory { color: #ffd700; }
+  .game-end-text.defeat { color: #ff4444; }
+  .game-end-text.draw { color: #6495ed; }
+  @keyframes textPop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+    20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    40% { transform: translate(-50%, -50%) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+  }
   #study-nav { display: none; }
   #file-import { display: none; }
 
@@ -1481,9 +1531,64 @@ function finishTurn(piece, res, ctx) {
 
 function announce(term) {
   const hint = document.getElementById("hint");
-  if (term.winner === "draw") hint.textContent = "平局！局面重复 3 次。";
-  else if (term.stalemate) hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜（对方无棋可走）！";
-  else hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
+  const isOnline = onlineMode && mySide;
+  let result;
+  if (term.winner === "draw") {
+    hint.textContent = "平局！局面重复 3 次。";
+    result = "draw";
+  } else if (term.stalemate) {
+    hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜（对方无棋可走）！";
+    result = isOnline ? (term.winner === mySide ? "victory" : "defeat") : "victory";
+  } else {
+    hint.textContent = (term.winner === "white" ? "白" : "黑") + "方胜！";
+    result = isOnline ? (term.winner === mySide ? "victory" : "defeat") : "victory";
+  }
+  showGameEndAnimation(result);
+}
+
+function showGameEndAnimation(result) {
+  // 光晕闪烁
+  const flash = document.createElement("div");
+  flash.className = "game-end-flash " + result;
+  document.body.appendChild(flash);
+  // 棋盘震动（失败时）
+  if (result === "defeat") {
+    const board = document.getElementById("board-wrap");
+    if (board) { board.classList.add("board-shake"); setTimeout(() => board.classList.remove("board-shake"), 600); }
+  }
+  // 大字提示
+  const textMap = { victory: "🏆 胜 利 🏆", defeat: "💀 败 北 💀", draw: "🤝 平 局 🤝" };
+  const txt = document.createElement("div");
+  txt.className = "game-end-text " + result;
+  txt.textContent = textMap[result];
+  document.body.appendChild(txt);
+  // 撒花（胜利/平局）
+  if (result !== "defeat") spawnConfetti(result === "victory" ? 60 : 25);
+  // 清理
+  setTimeout(() => { flash.remove(); txt.remove(); }, 2500);
+}
+
+function spawnConfetti(count) {
+  const overlay = document.createElement("div");
+  overlay.id = "game-end-overlay";
+  document.body.appendChild(overlay);
+  const palette = count > 30
+    ? ["#ffd700", "#ffec80", "#ffb347", "#ff6b6b", "#4ecdc4", "#45b7d1"]
+    : ["#6495ed", "#87ceeb", "#b0c4de", "#add8e6"];
+  for (let i = 0; i < count; i++) {
+    const c = document.createElement("div");
+    c.className = "confetti";
+    c.style.left = Math.random() * 100 + "%";
+    c.style.top = -10 + Math.random() * 20 + "px";
+    c.style.background = palette[Math.floor(Math.random() * palette.length)];
+    c.style.width = 6 + Math.random() * 8 + "px";
+    c.style.height = 6 + Math.random() * 8 + "px";
+    c.style.borderRadius = Math.random() > 0.5 ? "50%" : "2px";
+    c.style.animationDelay = Math.random() * 1.5 + "s";
+    c.style.animationDuration = 2 + Math.random() * 1.5 + "s";
+    overlay.appendChild(c);
+  }
+  setTimeout(() => overlay.remove(), 4500);
 }
 
 /* ----- 悔棋 / 撤销悔棋：落子前快照入 undoStack；悔棋压 redoStack；新动作清 redoStack ----- */
