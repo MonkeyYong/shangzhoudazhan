@@ -144,13 +144,21 @@ function handleJoinRoom(ws, roomId) {
   // 通知双方游戏开始（携带布局信息）
   send(ws, { type: 'game-start', side: 'black', preset: room.preset });
   send(room.players[0], { type: 'game-start', side: 'white', preset: room.preset });
+  // 白方先手，启动倒计时
+  room.players.forEach(p => send(p, { type: 'timer-start', side: 'white' }));
   console.log(`玩家加入房间 ${roomId}，游戏开始，布局=${room.preset}`);
 }
 
 function handleMove(ws, data) {
-  const { roomId } = ws;
+  const { roomId, side } = ws;
   if (!roomId) return;
   broadcast(roomId, ws, { type: 'move', data: data.data });
+  // 通知双方：下一步轮到对手，启动倒计时
+  const nextSide = side === 'white' ? 'black' : 'white';
+  const room = rooms.get(roomId);
+  if (room) {
+    room.players.forEach(p => send(p, { type: 'timer-start', side: nextSide }));
+  }
   console.log(`房间 ${roomId} 收到落子:`, data.data);
 }
 
@@ -178,9 +186,12 @@ function handleUndoApprove(ws, data) {
     send(opponent, { type: 'undo-approve' });
   }
   // 双方都执行悔棋（退两步：对手的+自己的）
+  // 悔棋后轮到请求方行棋
   room.players.forEach(player => {
     send(player, { type: 'do-undo', count: 2 });
   });
+  // 悔棋请求方行棋，启动倒计时
+  room.players.forEach(p => send(p, { type: 'timer-start', side }));
   console.log(`[悔棋] 双方执行悔棋（两步）`);
 }
 
