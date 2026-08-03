@@ -878,8 +878,6 @@ function buildSkinRow() {
     const aw = (s.accent && s.accent.white) ? s.accent.white : PAL_TEAL;
     const ab = (s.accent && s.accent.black) ? s.accent.black : PAL_CRIMSON;
     b.innerHTML =
-      '<i class="sw-pal" style="left:4px;background:' + SK_RGBA(ab.border, 0.9) + '"></i>' +
-      '<i class="sw-pal" style="right:4px;background:' + SK_RGBA(aw.border, 0.9) + '"></i>' +
       '<span>' + s.name + '</span>';
     b.addEventListener("click", () => { applySkin(id); saveSkin(); });
     row.appendChild(b);
