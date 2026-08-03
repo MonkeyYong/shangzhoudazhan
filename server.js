@@ -23,7 +23,8 @@ const PORT = 8080;
 const wss = new WebSocket.Server({ port: PORT });
 
 // 房间管理
-const rooms = new Map(); // roomId → { players: [ws1, ws2], state: {...} }
+const rooms = new Map(); // roomId → { players, state, gameState, playerSlots, disconnectTimer }
+const REJOIN_TIMEOUT = 60000; // 断线重连等待时间 60 秒
 
 // 生成 6 位房间码
 function generateRoomId() {
@@ -72,10 +73,16 @@ wss.on('connection', (ws) => {
 function handleMessage(ws, data) {
   switch (data.type) {
     case 'create-room':
-      handleCreateRoom(ws);
+      handleCreateRoom(ws, data.preset);
       break;
     case 'join-room':
       handleJoinRoom(ws, data.roomId);
+      break;
+    case 'rejoin-room':
+      handleRejoinRoom(ws, data.roomId, data.side);
+      break;
+    case 'cache-game-state':
+      handleCacheGameState(ws, data);
       break;
     case 'move':
       handleMove(ws, data);
@@ -95,21 +102,28 @@ function handleMessage(ws, data) {
     case 'chat':
       handleChat(ws, data);
       break;
+    case 'leave-room':
+      handleLeaveRoom(ws);
+      break;
     default:
       console.log('未知消息类型:', data.type);
   }
 }
 
-function handleCreateRoom(ws) {
+function handleCreateRoom(ws, preset) {
   const roomId = generateRoomId();
   rooms.set(roomId, {
     players: [ws],
-    state: { created: Date.now() }
+    state: { created: Date.now() },
+    gameState: null,
+    playerSlots: { white: ws, black: null },
+    disconnectTimer: null,
+    preset: preset || 'battle' // 房主选择的布局
   });
   ws.roomId = roomId;
   ws.side = 'white'; // 房主执白
   send(ws, { type: 'room-created', roomId });
-  console.log(`房间 ${roomId} 已创建`);
+  console.log(`房间 ${roomId} 已创建，布局=${preset}`);
 }
 
 function handleJoinRoom(ws, roomId) {
@@ -123,13 +137,14 @@ function handleJoinRoom(ws, roomId) {
     return;
   }
   room.players.push(ws);
+  room.playerSlots.black = ws;
   ws.roomId = roomId;
   ws.side = 'black'; // 加入者执黑
 
-  // 通知双方游戏开始
-  send(ws, { type: 'game-start', side: 'black' });
-  send(room.players[0], { type: 'game-start', side: 'white' });
-  console.log(`玩家加入房间 ${roomId}，游戏开始`);
+  // 通知双方游戏开始（携带布局信息）
+  send(ws, { type: 'game-start', side: 'black', preset: room.preset });
+  send(room.players[0], { type: 'game-start', side: 'white', preset: room.preset });
+  console.log(`玩家加入房间 ${roomId}，游戏开始，布局=${room.preset}`);
 }
 
 function handleMove(ws, data) {
@@ -176,8 +191,84 @@ function handleChat(ws, data) {
   broadcast(roomId, ws, { type: 'chat', message: data.message });
 }
 
-function handleDisconnect(ws) {
+function handleCacheGameState(ws, data) {
   const { roomId } = ws;
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  room.gameState = data.data;
+}
+
+function handleRejoinRoom(ws, roomId, side) {
+  console.log(`[重连] 收到 rejoin-room 请求: roomId=${roomId}, side=${side}`);
+  const room = rooms.get(roomId);
+  if (!room) {
+    console.log(`[重连] 失败: 房间 ${roomId} 不存在`);
+    send(ws, { type: 'error', message: '房间不存在或已过期' });
+    return;
+  }
+  // 检查该颜色槽位是否为空（原玩家已断线）
+  if (room.playerSlots[side] !== null) {
+    console.log(`[重连] 失败: 房间 ${roomId} 的 ${side} 槽位已被占用`);
+    send(ws, { type: 'error', message: '该位置已有玩家' });
+    return;
+  }
+  // 替换槽位
+  room.playerSlots[side] = ws;
+  room.players.push(ws);
+  ws.roomId = roomId;
+  ws.side = side;
+
+  // 取消销毁定时器
+  if (room.disconnectTimer) {
+    clearTimeout(room.disconnectTimer);
+    room.disconnectTimer = null;
+  }
+
+  // 发送缓存的棋局给重连方
+  if (room.gameState) {
+    console.log(`[重连] 成功: 发送缓存棋局给 ${side}，棋子数=${room.gameState.pieces ? room.gameState.pieces.length : 0}`);
+    send(ws, { type: 'game-state', data: room.gameState });
+  } else {
+    // 没有缓存棋局（还没走过子），让对手发一份过来
+    console.log(`[重连] 成功: 无缓存棋局，请求对手同步`);
+    broadcast(roomId, ws, { type: 'request-sync' });
+  }
+
+  // 通知对手已重连
+  broadcast(roomId, ws, { type: 'opponent-rejoined' });
+  console.log(`[重连] 玩家 ${side} 重连房间 ${roomId}，当前房间人数=${room.players.length}`);
+}
+
+function handleLeaveRoom(ws) {
+  const { roomId, side } = ws;
+  if (!roomId) return;
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  console.log(`玩家 ${side} 主动离开房间 ${roomId}`);
+
+  // 通知对手
+  broadcast(roomId, ws, { type: 'opponent-left' });
+
+  // 清空槽位
+  if (side && room.playerSlots[side] === ws) {
+    room.playerSlots[side] = null;
+  }
+  room.players = room.players.filter(p => p !== ws);
+  ws.roomId = null;
+  ws.side = null;
+
+  // 房间空了直接销毁
+  if (room.players.length === 0) {
+    if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
+    rooms.delete(roomId);
+    console.log(`房间 ${roomId} 已销毁（无人在线）`);
+  }
+}
+
+function handleDisconnect(ws) {
+  const { roomId, side } = ws;
   if (!roomId) {
     console.log('客户端断开（未加入房间）');
     return;
@@ -185,16 +276,33 @@ function handleDisconnect(ws) {
   const room = rooms.get(roomId);
   if (!room) return;
 
-  // 通知对手
-  broadcast(roomId, ws, { type: 'opponent-left' });
-
-  // 移除玩家
-  room.players = room.players.filter(p => p !== ws);
-  if (room.players.length === 0) {
-    rooms.delete(roomId);
-    console.log(`房间 ${roomId} 已销毁`);
+  // 清空该玩家的槽位
+  if (side && room.playerSlots[side] === ws) {
+    room.playerSlots[side] = null;
   }
-  console.log(`玩家断开房间 ${roomId}`);
+
+  // 从 players 数组移除
+  room.players = room.players.filter(p => p !== ws);
+
+  // 通知对手断线（不是离开）
+  broadcast(roomId, ws, { type: 'opponent-disconnected', timeout: 60 });
+
+  // 如果房间空了，直接销毁
+  if (room.players.length === 0) {
+    if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
+    rooms.delete(roomId);
+    console.log(`房间 ${roomId} 已销毁（无人在线）`);
+  } else {
+    // 启动延迟销毁定时器
+    room.disconnectTimer = setTimeout(() => {
+      const r = rooms.get(roomId);
+      if (r && r.players.length === 0) {
+        rooms.delete(roomId);
+        console.log(`房间 ${roomId} 已销毁（超时）`);
+      }
+    }, REJOIN_TIMEOUT);
+    console.log(`玩家 ${side} 断线房间 ${roomId}，等待重连...`);
+  }
 }
 
 // 启动服务器
