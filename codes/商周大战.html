@@ -395,7 +395,7 @@
     pointer-events: none; z-index: 9998;
     animation: flashFade 1.2s ease-out forwards;
   }
-  .game-end-flash.victory { background: radial-gradient(circle, rgba(255,215,0,0.4), rgba(255,215,0,0) 70%); }
+  .game-end-flash.victory, .game-end-flash.victory-white { background: radial-gradient(circle, rgba(255,215,0,0.4), rgba(255,215,0,0) 70%); }
   .game-end-flash.victory-black { background: radial-gradient(circle, rgba(155,89,182,0.5), rgba(155,89,182,0) 70%); }
   .game-end-flash.defeat { background: radial-gradient(circle, rgba(255,0,0,0.5), rgba(255,0,0,0) 70%); }
   .game-end-flash.draw { background: radial-gradient(circle, rgba(100,149,237,0.4), rgba(100,149,237,0) 70%); }
@@ -417,7 +417,7 @@
     pointer-events: none; z-index: 10000;
     animation: textPop 2s ease-out forwards;
   }
-  .game-end-text.victory { color: #ffd700; }
+  .game-end-text.victory, .game-end-text.victory-white { color: #ffd700; }
   .game-end-text.victory-black { color: #c39bd3; }
   .game-end-text.defeat { color: #ff4444; }
   .game-end-text.draw { color: #6495ed; }
@@ -1547,38 +1547,31 @@ function announce(term) {
   showGameEndAnimation(result);
 }
 
-// 判断是胜利还是失败：联机看 mySide，人机看 aiSide，双人对弈按胜方颜色
+// 判断结果：失败→defeat，胜利→按胜方颜色（黑方用紫色动画）
 function judgeResult(winner) {
-  if (onlineMode && mySide) return winner === mySide ? "victory" : "defeat";
-  if (aiSide) return winner === aiSide ? "defeat" : "victory";
-  return "victory-" + winner; // "victory-white" 或 "victory-black"
+  if (onlineMode && mySide) return winner === mySide ? ("victory-" + winner) : "defeat";
+  if (aiSide) return winner === aiSide ? "defeat" : ("victory-" + winner);
+  return "victory-" + winner;
 }
 
 function showGameEndAnimation(result) {
-  const isBlackVictory = result === "victory-black";
-  const flashType = result.startsWith("victory") ? (isBlackVictory ? "victory-black" : "victory") : result;
-  // 光晕闪烁
+  const flashClass = result; // "victory-white", "victory-black", "defeat", "draw"
   const flash = document.createElement("div");
-  flash.className = "game-end-flash " + flashType;
+  flash.className = "game-end-flash " + flashClass;
   document.body.appendChild(flash);
-  // 棋盘震动（失败时）
   if (result === "defeat") {
     const board = document.getElementById("board-wrap");
     if (board) { board.classList.add("board-shake"); setTimeout(() => board.classList.remove("board-shake"), 600); }
   }
-  // 大字提示
-  const textMap = {
-    "victory": "🏆 胜 利 🏆", "victory-white": "🏆 胜 利 🏆", "victory-black": "🏆 胜 利 🏆",
-    defeat: "💀 败 北 💀", draw: "🤝 平 局 🤝"
-  };
-  const textType = result.startsWith("victory") ? (isBlackVictory ? "victory-black" : "victory") : result;
+  const emoji = result === "defeat" ? "💀 败 北 💀" : result === "draw" ? "🤝 平 局 🤝" : "🏆 胜 利 🏆";
   const txt = document.createElement("div");
-  txt.className = "game-end-text " + textType;
-  txt.textContent = textMap[result];
+  txt.className = "game-end-text " + flashClass;
+  txt.textContent = emoji;
   document.body.appendChild(txt);
-  // 撒花（胜利/平局）
-  if (result !== "defeat") spawnConfetti(isBlackVictory ? "black" : (result === "draw" ? "draw" : "gold"));
-  // 清理
+  if (result !== "defeat") {
+    const style = result === "victory-black" ? "black" : result === "draw" ? "draw" : "gold";
+    spawnConfetti(style);
+  }
   setTimeout(() => { flash.remove(); txt.remove(); }, 2500);
 }
 
